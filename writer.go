@@ -12,10 +12,7 @@ import (
 )
 
 type MobiWriter struct {
-	file         interface{} // Mask the Mobi file field
-	out          io.Writer
-	writtenBytes int
-
+	file        *os.File
 	timestamp   uint32
 	title       string
 	compression mobiPDHCompression
@@ -70,19 +67,13 @@ func (w *MobiWriter) AddCover(cover, thumbnail string) {
 	w.embed(EmbThumb, thumbnailData)
 }
 
-// NewFileWriter initializes a writer. Takes a pointer to file and book title/database name
-func NewFileWriter(filename string) (writer *MobiWriter, err error) {
-	file, err := os.Create(filename)
+// NewWriter initializes a writer. Takes a pointer to file and book title/database name
+func NewWriter(filename string) (writer *MobiWriter, err error) {
+	writer = &MobiWriter{}
+	writer.file, err = os.Create(filename)
 	if err != nil {
 		return nil, err
 	}
-	writer = NewWriter(file)
-	return
-}
-
-// NewWriter initializes a writer. Takes a write output and book title/database name
-func NewWriter(output io.Writer) (writer *MobiWriter) {
-	writer = &MobiWriter{out: output}
 	return
 }
 
@@ -107,7 +98,22 @@ func (w *MobiWriter) RecordCount() Mint {
 	return Mint(len(w.Records))
 }
 
+// Write preserves backwards compatibility of the interface and writes to a file if created with NewWriter
 func (w *MobiWriter) Write() {
+	if w.file == nil {
+		panic("Only works if you used NewWriter to output to file. Recommend using WriteTo instead")
+	}
+	_, err := w.WriteTo(w.file)
+	if err != nil {
+		panic(err)
+	}
+}
+
+// WriteTo will write the status of this MobiWriter to the provided Writer
+func (w *MobiWriter) WriteTo(out io.Writer) (n int64, err error) {
+
+	bw := &binaryWriter{out: out}
+
 	// Generate HTML file
 	w.bookHtml = new(bytes.Buffer)
 	w.bookHtml.WriteString("<html><head></head><body>")
@@ -188,10 +194,6 @@ func (w *MobiWriter) Write() {
 				w.Exth.Add(EXTH_THUMBOFFSET, i)
 			}
 		}
-		//		for z := 0; z < w.EmbeddedCount(); z++ {
-
-		//			w.Records = append(w.Records, w.Images[z])
-		//		}
 	} else {
 		w.Header.FirstImageIndex = 4294967295
 	}
@@ -206,57 +208,25 @@ func (w *MobiWriter) Write() {
 	w.Header.FcisRecordIndex = w.AddRecord(w.generateFcis()).UInt32() // Fcis
 	w.AddRecord([]uint8{0xE9, 0x8E, 0x0D, 0x0A})                      // EOF
 
-	//fmt.Printf("%+s\n", w.Records)
-	w.initPDF()
-	w.initPDH()
-	w.initHeader()
-	w.initExth()
+	w.initPDF(bw)
+	w.initPDH(bw)
+	w.initHeader(bw)
+	w.initExth(bw)
 
-	w.seekForward(1, false)
-	var err error
-	// _, err := w.file.Seek(1, io.SeekCurrent)
-	// if err != nil {
-	// 	panic(err)
-	// }
-	w.writeBytes([]byte(w.title))
-	_, err = w.seekForward((int(w.Pdh.RecordCount)*8)+1024*10, true)
+	bw.pad(1)
+
+	bw.Write([]byte(w.title))
+	_, err = bw.seekForwardTo((int(w.Pdh.RecordCount) * 8) + 1024*10)
 	if err != nil {
-		panic(err)
+		return bw.written(), err
 	}
 	for i := 1; i < w.RecordCount().Int(); i++ {
-		_, err := w.writeBytes(w.Records[i])
+		_, err := bw.Write(w.Records[i])
 		if err != nil {
-			panic(err)
+			return bw.written(), err
 		}
 	}
-}
-
-func (w *MobiWriter) writeBytes(data []byte) (n int, err error) {
-	n, err = w.out.Write(data)
-	w.writtenBytes += n
-	return
-}
-
-func (w *MobiWriter) writeBinary(data interface{}) (n int, err error) {
-	buf := bytes.NewBuffer(make([]byte, 0))
-
-	err = binary.Write(buf, binary.BigEndian, data)
-	if err != nil {
-		return 0, err
-	}
-	var wb int64
-	wb, err = buf.WriteTo(w.out)
-	n = int(wb)
-	w.writtenBytes += n
-	return
-}
-
-func (w *MobiWriter) seekForward(len int, absolute bool) (bytes int, err error) {
-	if absolute {
-		len = len - w.writtenBytes // Relative write forward
-	}
-	data := make([]byte, len, len)
-	return w.writeBytes(data)
+	return int64(bw.writtenBytes), nil
 }
 
 func (w *MobiWriter) EmbeddedCount() Mint {
@@ -377,7 +347,7 @@ func (w *MobiWriter) generateCNCX() {
 	}
 }
 
-func (w *MobiWriter) initPDF() *MobiWriter {
+func (w *MobiWriter) initPDF(bw *binaryWriter) *MobiWriter {
 	stringToBytes(underlineTitle(w.title), &w.Pdf.DatabaseName) // Set Database Name
 	w.Pdf.CreationTime = w.timestamp                            // Set Time
 	w.Pdf.ModificationTime = w.timestamp                        // Set Time
@@ -387,13 +357,13 @@ func (w *MobiWriter) initPDF() *MobiWriter {
 
 	w.Pdf.RecordsNum = w.RecordCount().UInt16()
 
-	w.writeBinary(w.Pdf)
+	bw.writeBinary(w.Pdf)
 
 	Oft := uint32((w.Pdf.RecordsNum * 8) + MOBI_PALMDB_HEADER_LEN + 2)
 
 	for i := uint16(0); i < w.Pdf.RecordsNum; i++ {
 
-		w.writeBinary(mobiRecordOffset{Offset: Oft, UniqueID: i}) // Write
+		bw.writeBinary(mobiRecordOffset{Offset: Oft, UniqueID: i}) // Write
 		if i == 0 {
 			Oft = (uint32(w.Pdh.RecordCount) * 8) + uint32(1024*10)
 		}
@@ -402,20 +372,20 @@ func (w *MobiWriter) initPDF() *MobiWriter {
 		}
 	}
 
-	w.writeBytes([]uint8{0, 0})
+	bw.pad(2)
 
 	return w
 }
 
-func (w *MobiWriter) initPDH() *MobiWriter {
+func (w *MobiWriter) initPDH(bw *binaryWriter) *MobiWriter {
 	w.Pdh.Compression = w.compression
 	w.Pdh.RecordSize = MOBI_MAX_RECORD_SIZE
 
-	w.writeBinary(w.Pdh) // Write
+	bw.writeBinary(w.Pdh) // Write
 	return w
 }
 
-func (w *MobiWriter) initHeader() *MobiWriter {
+func (w *MobiWriter) initHeader(bw *binaryWriter) *MobiWriter {
 	stringToBytes("MOBI", &w.Header.Identifier)
 	w.Header.HeaderLength = 232
 	w.Header.MobiType = 2
@@ -456,11 +426,11 @@ func (w *MobiWriter) initHeader() *MobiWriter {
 	w.Header.FullNameLength = uint32(len(w.title))
 	w.Header.FullNameOffset = uint32(MOBI_PALMDOC_HEADER_LEN + MOBI_MOBIHEADER_LEN + w.Exth.GetHeaderLenght() + 1)
 
-	w.writeBinary(w.Header) // Write
+	bw.writeBinary(w.Header) // Write
 	return w
 }
 
-func (w *MobiWriter) initExth() *MobiWriter {
+func (w *MobiWriter) initExth(bw *binaryWriter) *MobiWriter {
 	stringToBytes("EXTH", &w.Exth.Identifier)
 	w.Exth.HeaderLenght = 12
 
@@ -468,25 +438,74 @@ func (w *MobiWriter) initExth() *MobiWriter {
 		w.Exth.HeaderLenght += k.RecordLength
 	}
 
-	Padding := w.Exth.HeaderLenght % 4
-	w.Exth.HeaderLenght += Padding
+	padding := w.Exth.HeaderLenght % 4
+	w.Exth.HeaderLenght += padding
 
 	w.Exth.RecordCount = uint32(len(w.Exth.Records))
 
-	w.writeBinary(w.Exth.Identifier)
-	w.writeBinary(w.Exth.HeaderLenght)
-	w.writeBinary(w.Exth.RecordCount)
+	bw.writeBinary(w.Exth.Identifier)
+	bw.writeBinary(w.Exth.HeaderLenght)
+	bw.writeBinary(w.Exth.RecordCount)
 
 	for _, k := range w.Exth.Records {
-		w.writeBinary(k.RecordType)
-		w.writeBinary(k.RecordLength)
-		w.writeBinary(k.Value)
+		bw.writeBinary(k.RecordType)
+		bw.writeBinary(k.RecordLength)
+		bw.writeBinary(k.Value)
 	}
 
 	// Add zeros to reach multiples of 4 for the header
-	for Padding != 0 {
-		w.writeBytes([]byte{0})
-		Padding--
-	}
+	bw.pad(uint(padding))
 	return w
+}
+
+// binaryWriter keeps track of bytes written and allows for forward 'seek' operations
+type binaryWriter struct {
+	out          io.Writer
+	writtenBytes int
+}
+
+func (w *binaryWriter) written() int64 {
+	return int64(w.writtenBytes)
+}
+
+// Write implements the Writer interface for convenience
+func (w *binaryWriter) Write(data []byte) (n int, err error) {
+	n, err = w.out.Write(data)
+	if err == nil {
+		w.writtenBytes += n
+	}
+	return
+}
+
+// writeBinary writes a struct as a binary structure
+func (w *binaryWriter) writeBinary(data interface{}) (n int, err error) {
+	buf := bytes.NewBuffer(make([]byte, 0))
+
+	err = binary.Write(buf, binary.BigEndian, data)
+	if err != nil {
+		return 0, err
+	}
+	var written int64
+	written, err = buf.WriteTo(w.out)
+	n = int(written)
+	w.writtenBytes += n
+	return
+}
+
+// pad writes zero byte padding
+func (w *binaryWriter) pad(len uint) (bytes int, err error) {
+	if len == 0 {
+		return 0, nil
+	}
+	data := make([]byte, len, len)
+	return w.Write(data)
+}
+
+// seekForwardTo allows forward seeking by zero-byte padding to achieve a particular written byte count.
+func (w *binaryWriter) seekForwardTo(len int) (bytes int, err error) {
+	var padding uint
+	if len > w.writtenBytes {
+		padding = uint(len - w.writtenBytes) // Relative write forward
+	}
+	return w.pad(padding)
 }

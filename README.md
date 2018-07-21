@@ -16,10 +16,7 @@ Writer/Reader for Mobi format.
 ## Usage
 ### Writer
 
-	m, err := mobi.NewWriter("output.mobi")
-	if err != nil {
-		panic(err)
-	}
+	var m mobi.MobiWriter
 	
 	m.Title("Book Title")
 	m.Compression(mobi.CompressionNone) // LZ77 compression is also possible using  mobi.CompressionPalmDoc
@@ -42,7 +39,12 @@ Writer/Reader for Mobi format.
 	m.NewChapter("Chapter 4", []byte("Some text here")).AddSubChapter("Chapter 4-1", []byte("Some text here"))
 
     // Output MOBI File
-	m.Write()
+	file, err := os.Create(filename)
+	if err != nil {
+		panic(err)
+	}
+	m.WriteTo(file)
+	file.Close()
 
 ### Reader
 For now, Reader does not give any useful information.
