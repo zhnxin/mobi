@@ -311,14 +311,12 @@ func (w *MobiWriter) generateCNCX() {
 			w.chapterCount++
 		} else {
 			CNCX_ID := fmt.Sprintf("%03v", w.chapterCount)
-			//			fmt.Printf("Node: %v\n", CNCX_ID)
 			w.Idxt.Offset = append(w.Idxt.Offset, uint16(MOBI_INDX_HEADER_LEN+w.cncxBuffer.Len()))
 
-			w.cncxBuffer.WriteByte(byte(len(CNCX_ID)))         // Len of ID
-			w.cncxBuffer.WriteString(CNCX_ID)                  // ID
-			w.cncxBuffer.WriteByte(controlByte(TagxSingle)[0]) // Controll Byte
-			w.cncxBuffer.Write(vwiEncInt(node.RecordOffset))   // Record offset
-			fmt.Printf("Offset: %v", node.RecordOffset)
+			w.cncxBuffer.WriteByte(byte(len(CNCX_ID)))             // Len of ID
+			w.cncxBuffer.WriteString(CNCX_ID)                      // ID
+			w.cncxBuffer.WriteByte(controlByte(TagxSingle)[0])     // Controll Byte
+			w.cncxBuffer.Write(vwiEncInt(node.RecordOffset))       // Record offset
 			w.cncxBuffer.Write(vwiEncInt(node.Len))                // Lenght of a record
 			w.cncxBuffer.Write(vwiEncInt(w.cncxLabelBuffer.Len())) // Label Offset 	// Offset relative to CNXC record
 			w.cncxLabelBuffer.Write(vwiEncInt(len(node.Title)))    // CNCXLabel lenght
@@ -334,7 +332,6 @@ func (w *MobiWriter) generateCNCX() {
 		for _, child := range node.SubChapters {
 			fmt.Printf("Child: %v %v %v\n", Id, i, child.Title)
 			CNCX_ID := fmt.Sprintf("%03v", w.chapterCount)
-			//				fmt.Printf("Node: %v\n", CNCX_ID)
 			w.Idxt.Offset = append(w.Idxt.Offset, uint16(MOBI_INDX_HEADER_LEN+w.cncxBuffer.Len()))
 
 			w.cncxBuffer.WriteByte(byte(len(CNCX_ID)))             // Len of ID
