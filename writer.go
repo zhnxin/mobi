@@ -12,15 +12,16 @@ import (
 )
 
 type MobiWriter struct {
-	file        *os.File
+	file *os.File
+
 	timestamp   uint32
 	title       string
 	compression mobiPDHCompression
 
 	chapterCount int
 	chapters     []mobiChapter
-	// CSS allows you to set a custom stylesheet
-	CSS string
+
+	css string
 
 	bookHtml *bytes.Buffer
 
@@ -51,10 +52,13 @@ func (w *MobiWriter) embed(FileType EmbType, Data []byte) int {
 	return len(w.Embedded) - 1
 }
 
+//NewExthRecord adds a new exth record to the book
 func (w *MobiWriter) NewExthRecord(recType ExthType, value interface{}) {
 	w.Exth.Add(uint32(recType), value)
 }
 
+// AddCover sets the cover image
+// cover and thumbnail are both filenames
 func (w *MobiWriter) AddCover(cover, thumbnail string) {
 	coverData, err := ioutil.ReadFile(cover)
 	if err != nil {
@@ -79,11 +83,19 @@ func NewWriter(filename string) (writer *MobiWriter, err error) {
 	return
 }
 
+// Title sets the title of the book being written
 func (w *MobiWriter) Title(i string) *MobiWriter {
 	w.title = i
 	return w
 }
 
+// CSS declares the stylesheet (if any) to use for the book
+func (w *MobiWriter) CSS(css string) *MobiWriter {
+	w.css = css
+	return w
+}
+
+// Compression sets the compression mode to use
 func (w *MobiWriter) Compression(i mobiPDHCompression) *MobiWriter {
 	w.compression = i
 	return w
@@ -119,8 +131,8 @@ func (w *MobiWriter) WriteTo(out io.Writer) (n int64, err error) {
 	// Generate HTML file
 	w.bookHtml = new(bytes.Buffer)
 	stylePart := ""
-	if len(w.CSS) > 0 {
-		stylePart = fmt.Sprintf("<style>%s</style>", w.CSS)
+	if len(w.css) > 0 {
+		stylePart = fmt.Sprintf("<style>%s</style>", w.css)
 	}
 	w.bookHtml.WriteString(fmt.Sprintf("<html><head>%s</head><body>", stylePart))
 	for i := range w.chapters {
