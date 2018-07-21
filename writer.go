@@ -12,7 +12,9 @@ import (
 )
 
 type MobiWriter struct {
-	file *os.File
+	file         interface{} // Mask the Mobi file field
+	out          io.Writer
+	writtenBytes int
 
 	timestamp   uint32
 	title       string
@@ -68,13 +70,19 @@ func (w *MobiWriter) AddCover(cover, thumbnail string) {
 	w.embed(EmbThumb, thumbnailData)
 }
 
-// NewWriter initializes a writer. Takes a pointer to file and book title/database name
-func NewWriter(filename string) (writer *MobiWriter, err error) {
-	writer = &MobiWriter{}
-	writer.file, err = os.Create(filename)
+// NewFileWriter initializes a writer. Takes a pointer to file and book title/database name
+func NewFileWriter(filename string) (writer *MobiWriter, err error) {
+	file, err := os.Create(filename)
 	if err != nil {
 		return nil, err
 	}
+	writer = NewWriter(file)
+	return
+}
+
+// NewWriter initializes a writer. Takes a write output and book title/database name
+func NewWriter(output io.Writer) (writer *MobiWriter) {
+	writer = &MobiWriter{out: output}
 	return
 }
 
@@ -103,7 +111,7 @@ func (w *MobiWriter) Write() {
 	// Generate HTML file
 	w.bookHtml = new(bytes.Buffer)
 	w.bookHtml.WriteString("<html><head></head><body>")
-	for i, _ := range w.chapters {
+	for i := range w.chapters {
 		w.chapters[i].generateHTML(w.bookHtml)
 	}
 	w.bookHtml.WriteString("</body></html>")
@@ -203,21 +211,52 @@ func (w *MobiWriter) Write() {
 	w.initPDH()
 	w.initHeader()
 	w.initExth()
-	_, err := w.file.Seek(1, 1)
-	if err != nil {
-		panic(err)
-	}
-	w.file.WriteString(w.title)
-	_, err = w.file.Seek((int64(w.Pdh.RecordCount)*8)+1024*10, 0)
+
+	w.seekForward(1, false)
+	var err error
+	// _, err := w.file.Seek(1, io.SeekCurrent)
+	// if err != nil {
+	// 	panic(err)
+	// }
+	w.writeBytes([]byte(w.title))
+	_, err = w.seekForward((int(w.Pdh.RecordCount)*8)+1024*10, true)
 	if err != nil {
 		panic(err)
 	}
 	for i := 1; i < w.RecordCount().Int(); i++ {
-		_, err := w.file.Write(w.Records[i])
+		_, err := w.writeBytes(w.Records[i])
 		if err != nil {
 			panic(err)
 		}
 	}
+}
+
+func (w *MobiWriter) writeBytes(data []byte) (n int, err error) {
+	n, err = w.out.Write(data)
+	w.writtenBytes += n
+	return
+}
+
+func (w *MobiWriter) writeBinary(data interface{}) (n int, err error) {
+	buf := bytes.NewBuffer(make([]byte, 0))
+
+	err = binary.Write(buf, binary.BigEndian, data)
+	if err != nil {
+		return 0, err
+	}
+	var wb int64
+	wb, err = buf.WriteTo(w.out)
+	n = int(wb)
+	w.writtenBytes += n
+	return
+}
+
+func (w *MobiWriter) seekForward(len int, absolute bool) (bytes int, err error) {
+	if absolute {
+		len = len - w.writtenBytes // Relative write forward
+	}
+	data := make([]byte, len, len)
+	return w.writeBytes(data)
 }
 
 func (w *MobiWriter) EmbeddedCount() Mint {
@@ -336,62 +375,6 @@ func (w *MobiWriter) generateCNCX() {
 			Id++
 		}
 	}
-	//	return
-	//	for _, node := range w.Nodes {
-	//		if node.ChildCount() == 0 {
-	//			CNCX_ID := fmt.Sprintf("%03v", w.NodeCount)
-	//			//			fmt.Printf("Node: %v\n", CNCX_ID)
-	//			w.Idxt2.Offset = append(w.Idxt2.Offset, uint16(MOBI_INDX_HEADER_LEN+w.Cncx.Len()))
-
-	//			w.Cncx.WriteByte(byte(len(CNCX_ID)))                 // Len of ID
-	//			w.Cncx.WriteString(CNCX_ID)                          // ID
-	//			w.Cncx.WriteByte(ControlByte(TagxSingle)[0])         // Controll Byte
-	//			w.Cncx.Write(vwiEncInt(node.RecordOffset, true))     // Record offset
-	//			w.Cncx.Write(vwiEncInt(len(node.Html)))        // Lenght of a record
-	//			w.Cncx.Write(vwiEncInt(w.CncxLabels.Len(), true))    // Label Offset 	// Offset relative to CNXC record
-	//			w.CncxLabels.Write(vwiEncInt(len(node.Title), true)) // CNCXLabel lenght
-	//			w.CncxLabels.WriteString(node.Title)                 // CNCXLabel title
-	//			w.Cncx.Write(vwiEncInt(0, true))                     // Depth
-	//			w.NodeCount++
-	//		}
-	//		if node.ChildCount() > 0 {
-	//			CNCX_ID := fmt.Sprintf("%03v", w.NodeCount)
-	//			//			fmt.Printf("Node: %v\n", CNCX_ID)
-	//			w.Idxt2.Offset = append(w.Idxt2.Offset, uint16(MOBI_INDX_HEADER_LEN+w.Cncx.Len()))
-
-	//			// Get Offset relative to IDXT?
-	//			w.Cncx.WriteByte(byte(len(CNCX_ID)))                         // Len of ID
-	//			w.Cncx.WriteString(CNCX_ID)                                  // ID
-	//			w.Cncx.WriteByte(ControlByte(TagxParent)[0])                 // Controll Byte
-	//			w.Cncx.Write(vwiEncInt(node.RecordOffset, true))             // Record offset
-	//			w.Cncx.Write(vwiEncInt(node.Len, true))                      // Lenght of a record
-	//			w.Cncx.Write(vwiEncInt(w.CncxLabels.Len(), true))            // Label Offset // Offset relative to CNXC record
-	//			w.CncxLabels.Write(vwiEncInt(len(node.Title), true))         // CNCXLabel lenght
-	//			w.CncxLabels.WriteString(node.Title)                         // CNCXLabel title
-	//			w.Cncx.Write(vwiEncInt(0, true))                             // Depth
-	//			w.Cncx.Write(vwiEncInt(w.NodeCount+1, true))                 // Child1
-	//			w.Cncx.Write(vwiEncInt(w.NodeCount+node.ChildCount(), true)) // ChildN
-	//			w.NodeCount++
-
-	//			for _, child := range node.Children {
-	//				CNCX_ID := fmt.Sprintf("%03v", w.NodeCount)
-	//				//				fmt.Printf("Node: %v\n", CNCX_ID)
-	//				w.Idxt2.Offset = append(w.Idxt2.Offset, uint16(MOBI_INDX_HEADER_LEN+w.Cncx.Len()))
-
-	//				w.Cncx.WriteByte(byte(len(CNCX_ID)))                  // Len of ID
-	//				w.Cncx.WriteString(CNCX_ID)                           // ID
-	//				w.Cncx.WriteByte(ControlByte(TagxChild)[0])           // Controll Byte
-	//				w.Cncx.Write(vwiEncInt(child.RecordOffset, true))     // Record offset
-	//				w.Cncx.Write(vwiEncInt(child.Len, true))              // Lenght of a record
-	//				w.Cncx.Write(vwiEncInt(w.CncxLabels.Len(), true))     // Label Offset //Offset relative to CNXC record
-	//				w.CncxLabels.Write(vwiEncInt(len(child.Title), true)) // CNCXLabel lenght
-	//				w.CncxLabels.WriteString(child.Title)                 // CNCXLabel title
-	//				w.Cncx.Write(vwiEncInt(1, true))                      // Depth
-	//				w.Cncx.Write(vwiEncInt(child.Parent, true))           // Parent
-	//				w.NodeCount++
-	//			}
-	//		}
-	//	}
 }
 
 func (w *MobiWriter) initPDF() *MobiWriter {
@@ -404,13 +387,13 @@ func (w *MobiWriter) initPDF() *MobiWriter {
 
 	w.Pdf.RecordsNum = w.RecordCount().UInt16()
 
-	binary.Write(w.file, binary.BigEndian, w.Pdf) // Write
+	w.writeBinary(w.Pdf)
 
 	Oft := uint32((w.Pdf.RecordsNum * 8) + MOBI_PALMDB_HEADER_LEN + 2)
 
 	for i := uint16(0); i < w.Pdf.RecordsNum; i++ {
 
-		binary.Write(w.file, binary.BigEndian, mobiRecordOffset{Offset: Oft, UniqueID: i}) // Write
+		w.writeBinary(mobiRecordOffset{Offset: Oft, UniqueID: i}) // Write
 		if i == 0 {
 			Oft = (uint32(w.Pdh.RecordCount) * 8) + uint32(1024*10)
 		}
@@ -419,7 +402,7 @@ func (w *MobiWriter) initPDF() *MobiWriter {
 		}
 	}
 
-	w.file.Write([]uint8{0, 0})
+	w.writeBytes([]uint8{0, 0})
 
 	return w
 }
@@ -428,7 +411,7 @@ func (w *MobiWriter) initPDH() *MobiWriter {
 	w.Pdh.Compression = w.compression
 	w.Pdh.RecordSize = MOBI_MAX_RECORD_SIZE
 
-	binary.Write(w.file, binary.BigEndian, w.Pdh) // Write
+	w.writeBinary(w.Pdh) // Write
 	return w
 }
 
@@ -473,7 +456,7 @@ func (w *MobiWriter) initHeader() *MobiWriter {
 	w.Header.FullNameLength = uint32(len(w.title))
 	w.Header.FullNameOffset = uint32(MOBI_PALMDOC_HEADER_LEN + MOBI_MOBIHEADER_LEN + w.Exth.GetHeaderLenght() + 1)
 
-	binary.Write(w.file, binary.BigEndian, w.Header) // Write
+	w.writeBinary(w.Header) // Write
 	return w
 }
 
@@ -490,19 +473,19 @@ func (w *MobiWriter) initExth() *MobiWriter {
 
 	w.Exth.RecordCount = uint32(len(w.Exth.Records))
 
-	binary.Write(w.file, binary.BigEndian, w.Exth.Identifier)
-	binary.Write(w.file, binary.BigEndian, w.Exth.HeaderLenght)
-	binary.Write(w.file, binary.BigEndian, w.Exth.RecordCount)
+	w.writeBinary(w.Exth.Identifier)
+	w.writeBinary(w.Exth.HeaderLenght)
+	w.writeBinary(w.Exth.RecordCount)
 
 	for _, k := range w.Exth.Records {
-		binary.Write(w.file, binary.BigEndian, k.RecordType)
-		binary.Write(w.file, binary.BigEndian, k.RecordLength)
-		binary.Write(w.file, binary.BigEndian, k.Value)
+		w.writeBinary(k.RecordType)
+		w.writeBinary(k.RecordLength)
+		w.writeBinary(k.Value)
 	}
 
 	// Add zeros to reach multiples of 4 for the header
 	for Padding != 0 {
-		w.file.Write([]byte{0})
+		w.writeBytes([]byte{0})
 		Padding--
 	}
 	return w
