@@ -237,28 +237,6 @@ func palmDocLZ77Pack(data []byte) []byte {
 			}
 			if found {
 				continue
-			} else {
-				//				Try forward
-				//				matchLen := 0
-				//				for z := 1; z < 10; z++ {
-				//					if data[i+z] == data[i] {
-				//						matchLen++
-				//					} else {
-				//						break
-				//					}
-				//				}
-				//				if matchLen > 3 {
-				//					//					fmt.Printf("\nLen CHeck: %v = %v", i, matchLen)
-				//					var m int64 = 1
-				//					var code int64 = 0x8000 + ((m << 3) & 0x3ff8) + (int64(matchLen) - 3)
-				//					outB = append(outB, data[i])
-				//					outB = append(outB, byte(code>>8))
-				//					outB = append(outB, byte(code))
-				//					//					fmt.Printf("Code: %x %x", byte(code>>8), byte(code))
-				//					i += matchLen
-				//					//if(ldata > )
-				//					continue
-				//				}
 			}
 		}
 
