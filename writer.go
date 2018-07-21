@@ -19,6 +19,8 @@ type MobiWriter struct {
 
 	chapterCount int
 	chapters     []mobiChapter
+	// CSS allows you to set a custom stylesheet
+	CSS string
 
 	bookHtml *bytes.Buffer
 
@@ -116,7 +118,11 @@ func (w *MobiWriter) WriteTo(out io.Writer) (n int64, err error) {
 
 	// Generate HTML file
 	w.bookHtml = new(bytes.Buffer)
-	w.bookHtml.WriteString("<html><head></head><body>")
+	stylePart := ""
+	if len(w.CSS) > 0 {
+		stylePart = fmt.Sprintf("<style>%s</style>", w.CSS)
+	}
+	w.bookHtml.WriteString(fmt.Sprintf("<html><head>%s</head><body>", stylePart))
 	for i := range w.chapters {
 		w.chapters[i].generateHTML(w.bookHtml)
 	}
