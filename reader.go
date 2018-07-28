@@ -239,7 +239,7 @@ func (r *Reader) parseIndexRecord(n uint32) error {
 
 // MatchMagic matches next N bytes (based on lenght of magic word)
 func (r *Reader) MatchMagic(magic mobiMagicType) bool {
-	if r.Peek(len(magic)).Magic() == magic {
+	if r.Peek(len(magic)).magic() == magic {
 		return true
 	}
 	return false

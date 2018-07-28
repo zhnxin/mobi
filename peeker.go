@@ -3,8 +3,8 @@ package mobi
 // Peeker is a multimorphic byte slice
 type Peeker []byte
 
-// Magic as mobiMagicType (string enum)
-func (p Peeker) Magic() mobiMagicType {
+// magic as mobiMagicType (string enum)
+func (p Peeker) magic() mobiMagicType {
 	return mobiMagicType(p)
 }
 
