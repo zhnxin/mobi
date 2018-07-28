@@ -160,7 +160,7 @@ func controlByte(tagx []mobiTagxTags) []byte {
 	var cbs []byte
 	var ans uint8 = 0
 	for _, tags := range tagx {
-		if tags.Control_Byte == 1 {
+		if tags.ControlByte == 1 {
 			cbs = append(cbs, ans)
 			ans = 0
 			continue

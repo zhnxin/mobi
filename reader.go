@@ -369,7 +369,7 @@ func (r *Reader) parsePtagx(data []byte) {
 	var Ptagx []mobiPTagx //= make([]mobiPTagx, r.Tagx.TagCount())
 
 	for _, x := range r.Tagx.Tags {
-		if x.Control_Byte == 0x01 {
+		if x.ControlByte == 0x01 {
 			controlBytes = controlBytes[1:]
 			continue
 		}

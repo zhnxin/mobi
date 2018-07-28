@@ -27,10 +27,10 @@ type mobiTagx struct {
 }
 
 type mobiTagxTags struct {
-	Tag          uint8 // /**< Tag */
-	TagNum       uint8 // /**< Number of values */
-	Bitmask      uint8 /**< Bitmask */
-	Control_Byte uint8 /**< EOF control byte */
+	Tag         uint8 // /**< Tag */
+	TagNum      uint8 // /**< Number of values */
+	Bitmask     uint8 /**< Bitmask */
+	ControlByte uint8 /**< EOF control byte */
 }
 
 func (r *mobiTagx) TagCount() int {
