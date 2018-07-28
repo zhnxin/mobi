@@ -10,6 +10,19 @@ import (
 	"time"
 )
 
+const (
+	// chSpace is the utf8 space character
+	chSpace = 0x20
+
+	// Maximum lookback offset we can pack in the 2-byte struct
+	lz77WindowSize = 0x7FF
+
+	lz77OffsetMask = 0x3FF8
+
+	lz77MaxChunkLen = 10
+	lz77MinChunkLen = 3
+)
+
 func printStruct(x interface{}) {
 	ref := reflect.ValueOf(x)
 
@@ -45,14 +58,6 @@ func printStruct(x interface{}) {
 			value = val.Interface()
 		}
 
-		//switch val.Kind() {
-		//case reflect.Slice:
-		////	for i := 0; i < val.NumField(); i++ {
-		//		PrintStruct(val.Index(i))
-		//		//fmt.Println(fmt.Sprintf("%-25v", typ.Name), fmt.Sprintf("%-5v:", CurPos), value)
-		//CurPos += typ.Type.Size()
-		//	}
-		//default:
 		fmt.Println(fmt.Sprintf("%-25v", typ.Name), fmt.Sprintf("%-5v:", CurPos), value)
 		CurPos += typ.Type.Size()
 		//}
@@ -95,8 +100,8 @@ var setBits [256]uint8 = [256]uint8{
 
 // VwiDec decoders variable lenght integer. Returns value and number of bytes consumed
 func vwiDec(src []uint8, forward bool) (uint32, uint32) {
-	var val uint32 = 0 //val = 0
-	var byts []uint8   // byts = bytearray()
+	var val uint32   //val = 0
+	var byts []uint8 // byts = bytearray()
 
 	if !forward { //if not forward:
 		for i, j := 0, len(src)-1; i < j; i, j = i+1, j-1 { //     src.reverse()
@@ -143,12 +148,12 @@ func vwiEncInt(x int) []uint8 {
 	return buf[:z]
 }
 
-func minimizeHTML(x []byte) []byte { //, int
+func minimizeHTML(x []byte) []byte {
 	//Clear multiple spaces
 	out := regexp.MustCompile("[ ]+").ReplaceAllString(string(x), " ")
 	out = regexp.MustCompile("[\t\r\n]").ReplaceAllString(out, "")
 	//Clear tabs, new lines
-	return []byte(out) //, len(out)
+	return []byte(out)
 }
 
 var mask_to_bit_shifts = map[int]uint8{1: 0, 2: 1, 3: 0, 4: 2, 8: 3, 12: 2, 16: 4, 32: 5, 48: 4, 64: 6, 128: 7, 192: 6}
@@ -199,85 +204,81 @@ func palmDocLZ77Pack(data []byte) []byte {
 	var ldata = len(data)
 
 	for i := 0; i < ldata; i++ {
-		if i > 10 && (ldata-i) > 10 {
-			found := false
+		if i > lz77MaxChunkLen && (ldata-i) > lz77MaxChunkLen {
 
 			//Bound offset saves times on look up
 			//Todo: custom lookup
-			var reset bool
-			boundOffset := i - 2047
+			boundOffset := i - lz77WindowSize
 			if boundOffset < 0 {
 				boundOffset = 0
-			} else {
-				reset = true
 			}
 
-			// If there's no match for 3 letters then no point looking
-			if f := bytes.LastIndex(data[boundOffset:i], data[i:i+3]); f != -1 {
-				for chunk_len := 10; chunk_len > 2; chunk_len-- {
-					j := bytes.LastIndex(data[boundOffset:i], data[i:i+chunk_len])
-					if j != -1 {
-						if reset {
-							j = i - 2047 + j
-							reset = false
-						}
-
-						found = true
-
-						var m int64 = int64(i) - int64(j)
-
-						var code int64 = 0x8000 + ((m << 3) & 0x3ff8) + (int64(chunk_len) - 3)
-
-						outB = append(outB, byte(code>>8))
-						outB = append(outB, byte(code))
-						i += chunk_len - 1
-						break
+			// If there's no match for min chunk length then no point looking
+			relIdx := bytes.LastIndex(data[boundOffset:i], data[i:i+lz77MinChunkLen])
+			if relIdx > -1 {
+				chunkLen := lz77MinChunkLen
+				// We found a chunk previously in the data - let's see if we can find a bigger one
+				for chunkLen = lz77MaxChunkLen; chunkLen > lz77MinChunkLen; chunkLen-- {
+					j := bytes.LastIndex(data[boundOffset:i], data[i:i+chunkLen])
+					if j > -1 {
+						relIdx = j
+						break // we found a bigger one
 					}
 				}
-			}
-			if found {
-				continue
+				absIdx := boundOffset + relIdx // get an absolute index
+				offset := int64(i) - int64(absIdx)
+
+				code := 0x8000 + ((offset << 3) & lz77OffsetMask) + (int64(chunkLen) - lz77MinChunkLen)
+
+				outB = append(outB, byte(code>>8))
+				outB = append(outB, byte(code))
+				i += chunkLen - 1
+
+				continue // Skip to next chunk to encode
 			}
 		}
 
-		ch := data[i]
-		och := byte(ch)
+		// We did not find any chunks we could use
+		och := data[i]
 
-		if och == 0x20 && (i+1) < ldata {
-			onch := byte(data[i+1])
+		// Pack space characters and following characters together
+		if och == chSpace && (i+1) < ldata {
+			onch := data[i+1]
 			if onch >= 0x40 && onch < 0x80 {
+				// if following is an ascii letter
+				// indicate space by setting 8th bit
 				outB = append(outB, onch^0x80)
-				i += 1
+				i++
 				continue
 			} else {
+				// just output the space
 				outB = append(outB, och)
 				continue
 			}
 		}
+
 		if och == 0 || (och > 8 && och < 0x80) {
+			// A single-byte character. Just append it
 			outB = append(outB, och)
 		} else {
+			// Multi-byte character - get all of them appended in
 			j := i
-			var binseq []uint8
+			var binseq []byte
 
 			for {
 				if j < ldata && len(binseq) < 8 {
-					ch = data[j]
-					och = byte(ch)
+					och = data[j]
 					if och == 0 || (och > 8 && och < 0x80) {
 						break
 					}
 					binseq = append(binseq, och)
-					j += 1
+					j++
 				} else {
 					break
 				}
 			}
 			outB = append(outB, byte(len(binseq)))
-
-			for rr := 0; rr < len(binseq); rr++ {
-				outB = append(outB, binseq[rr])
-			}
+			outB = append(outB, binseq...)
 
 			i += len(binseq) - 1
 		}
