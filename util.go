@@ -28,7 +28,7 @@ func printStruct(x interface{}) {
 		ref = ref.Elem()
 	}
 
-	var CurPos uintptr = 0
+	var CurPos uintptr
 	fmt.Println("---------------------- " + ref.Type().Name() + " ----------------------")
 	for i := 0; i < ref.NumField(); i++ {
 		val := ref.Field(i)
@@ -44,11 +44,11 @@ func printStruct(x interface{}) {
 		case "hex":
 			value = fmt.Sprintf("% x", val.Interface())
 		case "date":
-			if tim_, err := strconv.ParseInt(val.String(), 10, 64); err != nil {
+			if tim, err := strconv.ParseInt(val.String(), 10, 64); err != nil {
 				//BUG(fix): Check Mac/Unix timestamp format
 				//If the time has the top bit set, it's an unsigned 32-bit number counting from 1st Jan 1904
 				//If the time has the top bit clear, it's a signed 32-bit number counting from 1st Jan 1970.
-				value = time.Unix(tim_, 0)
+				value = time.Unix(tim, 0)
 			} else {
 				value = val.Interface()
 			}
@@ -77,7 +77,7 @@ func getExthMetaByTag(tag uint32) mobiExthMeta {
 	return ExthMeta[0]
 }
 
-var setBits [256]uint8 = [256]uint8{
+var setBits = [256]uint8{
 	0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4,
 	1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
 	1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
@@ -154,11 +154,11 @@ func minimizeHTML(x []byte) []byte {
 	return []byte(out)
 }
 
-var mask_to_bit_shifts = map[int]uint8{1: 0, 2: 1, 3: 0, 4: 2, 8: 3, 12: 2, 16: 4, 32: 5, 48: 4, 64: 6, 128: 7, 192: 6}
+var maskToBitShifts = map[int]uint8{1: 0, 2: 1, 3: 0, 4: 2, 8: 3, 12: 2, 16: 4, 32: 5, 48: 4, 64: 6, 128: 7, 192: 6}
 
 func controlByte(tagx []mobiTagxTags) []byte {
 	var cbs []byte
-	var ans uint8 = 0
+	var ans uint8
 	for _, tags := range tagx {
 		if tags.ControlByte == 1 {
 			cbs = append(cbs, ans)
@@ -167,7 +167,7 @@ func controlByte(tagx []mobiTagxTags) []byte {
 		}
 		nvals := uint8(1)
 		nentries := nvals / tags.TagNum
-		shifts := mask_to_bit_shifts[int(tags.Bitmask)]
+		shifts := maskToBitShifts[int(tags.Bitmask)]
 		ans |= tags.Bitmask & (nentries << shifts)
 	}
 	return cbs
