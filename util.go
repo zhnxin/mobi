@@ -17,8 +17,6 @@ const (
 	// Maximum lookback offset we can pack in the 2-byte struct
 	lz77WindowSize = 0x7FF
 
-	lz77OffsetMask = 0x3FF8
-
 	lz77MaxChunkLen = 10
 	lz77MinChunkLen = 3
 )
@@ -206,35 +204,26 @@ func palmDocLZ77Pack(data []byte) []byte {
 	for i := 0; i < ldata; i++ {
 		if i > lz77MaxChunkLen && (ldata-i) > lz77MaxChunkLen {
 
-			//Bound offset saves times on look up
-			//Todo: custom lookup
+			// Only seek through the available window size
 			boundOffset := i - lz77WindowSize
 			if boundOffset < 0 {
 				boundOffset = 0
 			}
 
-			// If there's no match for min chunk length then no point looking
-			relIdx := bytes.LastIndex(data[boundOffset:i], data[i:i+lz77MinChunkLen])
+			// Lookup the largest chunk we can find in the window
+			relIdx, chunkLen := lz77Lookup(data[boundOffset:i], data[i:i+lz77MaxChunkLen])
+
+			// Encode the chunk if we found one
 			if relIdx > -1 {
-				chunkLen := lz77MinChunkLen
-				// We found a chunk previously in the data - let's see if we can find a bigger one
-				for chunkLen = lz77MaxChunkLen; chunkLen > lz77MinChunkLen; chunkLen-- {
-					j := bytes.LastIndex(data[boundOffset:i], data[i:i+chunkLen])
-					if j > -1 {
-						relIdx = j
-						break // we found a bigger one
-					}
-				}
 				absIdx := boundOffset + relIdx // get an absolute index
 				offset := int64(i) - int64(absIdx)
-
-				code := 0x8000 + ((offset << 3) & lz77OffsetMask) + (int64(chunkLen) - lz77MinChunkLen)
-
+				// pack it into the data structure
+				code := 0x8000 + (offset << 3) + (int64(chunkLen) - lz77MinChunkLen)
+				// Write the two-byte structure
 				outB = append(outB, byte(code>>8))
 				outB = append(outB, byte(code))
-				i += chunkLen - 1
-
-				continue // Skip to next chunk to encode
+				i += chunkLen - 1 // jump forward, taking the i++ into account
+				continue          // Skip to next chunk to encode
 			}
 		}
 
@@ -264,7 +253,6 @@ func palmDocLZ77Pack(data []byte) []byte {
 			// Multi-byte character - get all of them appended in
 			j := i
 			var binseq []byte
-
 			for {
 				if j < ldata && len(binseq) < 8 {
 					och = data[j]
@@ -285,6 +273,49 @@ func palmDocLZ77Pack(data []byte) []byte {
 	}
 	outB = append(outB, tail...)
 	return outB
+}
+
+// lz77Lookup implements a single-pass lookup for all lengths of chunks.
+// It returns the longest chunk it found and the last index of that chunk.
+// It returns -1, _ if the chunk could not be found at all
+func lz77Lookup(window, chunk []byte) (idx, foundLen int) {
+	chLen := len(chunk)
+	if chLen < lz77MinChunkLen {
+		panic("Unable to search for chunks smaller than min chunk size!")
+	}
+	if chLen > lz77MaxChunkLen {
+		panic("Unable to search for chunks larger than the max chunk size!")
+	}
+
+	idxs := make([]int, chLen)
+	for i := range idxs {
+		idxs[i] = -1
+	}
+
+	foundLen = lz77MinChunkLen - 1 // haven't found any, but guaranteed to be > 0
+
+	c := chunk[0]
+
+	// Running backwards through the window to find the last indices
+	// stop if we've found a chunk of the full chunk length
+	for idx := len(window) - lz77MinChunkLen; foundLen < chLen && idx >= 0; idx-- {
+		if window[idx] == c { // shortcut check before expensive operation
+			// Ignoring the length of chunk we've already found, try all longer chunk lenghts
+			for currLen := foundLen + 1; currLen <= chLen; currLen++ {
+				eq := bytes.Equal(window[idx:idx+currLen], chunk[:currLen])
+				if eq {
+					idxs[currLen-1] = idx
+					// We've found the current length, only search for longer chunks now
+					foundLen = currLen
+				} else {
+					// Longer chunks have this one as prefix, and will not be present
+					break
+				}
+			}
+		}
+	}
+
+	return idxs[foundLen-1], foundLen
 }
 
 func int32ToBytes(i uint32) []byte {
