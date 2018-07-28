@@ -19,20 +19,20 @@ func (w *mobiBuilder) generateINDX1() {
 	// Tagx
 	tagx := mobiTagx{}
 	if w.chapterIsDeep() {
-		tagx.Tags = append(tagx.Tags, mobiTagxMap[TagEntry_Pos])
-		tagx.Tags = append(tagx.Tags, mobiTagxMap[TagEntry_Len])
-		tagx.Tags = append(tagx.Tags, mobiTagxMap[TagEntry_NameOffset])
-		tagx.Tags = append(tagx.Tags, mobiTagxMap[TagEntry_DepthLvl])
-		tagx.Tags = append(tagx.Tags, mobiTagxMap[TagEntry_Parent])
-		tagx.Tags = append(tagx.Tags, mobiTagxMap[TagEntry_Child1])
-		tagx.Tags = append(tagx.Tags, mobiTagxMap[TagEntry_ChildN])
-		tagx.Tags = append(tagx.Tags, mobiTagxMap[TagEntry_END])
+		tagx.Tags = append(tagx.Tags, mobiTagxMap[tagEntryPos])
+		tagx.Tags = append(tagx.Tags, mobiTagxMap[tagEntryLen])
+		tagx.Tags = append(tagx.Tags, mobiTagxMap[tagEntryNameOffset])
+		tagx.Tags = append(tagx.Tags, mobiTagxMap[tagEntryDepthLvl])
+		tagx.Tags = append(tagx.Tags, mobiTagxMap[tagEntryParent])
+		tagx.Tags = append(tagx.Tags, mobiTagxMap[tagEntryChild1])
+		tagx.Tags = append(tagx.Tags, mobiTagxMap[tagEntryChildN])
+		tagx.Tags = append(tagx.Tags, mobiTagxMap[tagEntryEND])
 	} else {
-		tagx.Tags = append(tagx.Tags, mobiTagxMap[TagEntry_Pos])
-		tagx.Tags = append(tagx.Tags, mobiTagxMap[TagEntry_Len])
-		tagx.Tags = append(tagx.Tags, mobiTagxMap[TagEntry_NameOffset])
-		tagx.Tags = append(tagx.Tags, mobiTagxMap[TagEntry_DepthLvl])
-		tagx.Tags = append(tagx.Tags, mobiTagxMap[TagEntry_END])
+		tagx.Tags = append(tagx.Tags, mobiTagxMap[tagEntryPos])
+		tagx.Tags = append(tagx.Tags, mobiTagxMap[tagEntryLen])
+		tagx.Tags = append(tagx.Tags, mobiTagxMap[tagEntryNameOffset])
+		tagx.Tags = append(tagx.Tags, mobiTagxMap[tagEntryDepthLvl])
+		tagx.Tags = append(tagx.Tags, mobiTagxMap[tagEntryEND])
 	}
 
 	/*************************************/

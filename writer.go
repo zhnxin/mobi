@@ -320,28 +320,28 @@ func (w *mobiBuilder) generateCNCX() {
 	w.chapterCount = 0
 
 	TagxSingle := []mobiTagxTags{
-		mobiTagxMap[TagEntry_Pos],
-		mobiTagxMap[TagEntry_Len],
-		mobiTagxMap[TagEntry_NameOffset],
-		mobiTagxMap[TagEntry_DepthLvl],
-		mobiTagxMap[TagEntry_END]}
+		mobiTagxMap[tagEntryPos],
+		mobiTagxMap[tagEntryLen],
+		mobiTagxMap[tagEntryNameOffset],
+		mobiTagxMap[tagEntryDepthLvl],
+		mobiTagxMap[tagEntryEND]}
 
 	TagxParent := []mobiTagxTags{
-		mobiTagxMap[TagEntry_Pos],
-		mobiTagxMap[TagEntry_Len],
-		mobiTagxMap[TagEntry_NameOffset],
-		mobiTagxMap[TagEntry_DepthLvl],
-		mobiTagxMap[TagEntry_Child1],
-		mobiTagxMap[TagEntry_ChildN],
-		mobiTagxMap[TagEntry_END]}
+		mobiTagxMap[tagEntryPos],
+		mobiTagxMap[tagEntryLen],
+		mobiTagxMap[tagEntryNameOffset],
+		mobiTagxMap[tagEntryDepthLvl],
+		mobiTagxMap[tagEntryChild1],
+		mobiTagxMap[tagEntryChildN],
+		mobiTagxMap[tagEntryEND]}
 
 	TagxChild := []mobiTagxTags{
-		mobiTagxMap[TagEntry_Pos],
-		mobiTagxMap[TagEntry_Len],
-		mobiTagxMap[TagEntry_NameOffset],
-		mobiTagxMap[TagEntry_DepthLvl],
-		mobiTagxMap[TagEntry_Parent],
-		mobiTagxMap[TagEntry_END]}
+		mobiTagxMap[tagEntryPos],
+		mobiTagxMap[tagEntryLen],
+		mobiTagxMap[tagEntryNameOffset],
+		mobiTagxMap[tagEntryDepthLvl],
+		mobiTagxMap[tagEntryParent],
+		mobiTagxMap[tagEntryEND]}
 
 	var id = len(w.chapters)
 

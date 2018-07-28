@@ -33,6 +33,6 @@ type mobiIndx struct {
 }
 
 type mobiIndxEntry struct {
-	EntryID    uint8
+	EntryID    tagEntry
 	EntryValue uint32
 }

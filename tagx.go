@@ -1,15 +1,15 @@
 package mobi
 
-var mobiTagxMap = map[uint8]mobiTagxTags{
-	TagEntry_Pos:        mobiTagxTags{1, 1, 1, 0},
-	TagEntry_Len:        mobiTagxTags{2, 1, 2, 0},
-	TagEntry_NameOffset: mobiTagxTags{3, 1, 4, 0},
-	TagEntry_DepthLvl:   mobiTagxTags{4, 1, 8, 0},
-	TagEntry_Parent:     mobiTagxTags{21, 1, 16, 0},
-	TagEntry_Child1:     mobiTagxTags{22, 1, 32, 0},
-	TagEntry_ChildN:     mobiTagxTags{23, 1, 64, 0},
-	TagEntry_PosFid:     mobiTagxTags{6, 2, 128, 0},
-	TagEntry_END:        mobiTagxTags{0, 0, 0, 1}}
+var mobiTagxMap = map[tagEntry]mobiTagxTags{
+	tagEntryPos:        mobiTagxTags{1, 1, 1, 0},
+	tagEntryLen:        mobiTagxTags{2, 1, 2, 0},
+	tagEntryNameOffset: mobiTagxTags{3, 1, 4, 0},
+	tagEntryDepthLvl:   mobiTagxTags{4, 1, 8, 0},
+	tagEntryParent:     mobiTagxTags{21, 1, 16, 0},
+	tagEntryChild1:     mobiTagxTags{22, 1, 32, 0},
+	tagEntryChildN:     mobiTagxTags{23, 1, 64, 0},
+	tagEntryPosFid:     mobiTagxTags{6, 2, 128, 0},
+	tagEntryEND:        mobiTagxTags{0, 0, 0, 1}}
 
 type mobiTagx struct {
 	Identifier       [4]byte `format:"string"`
@@ -27,10 +27,10 @@ type mobiTagx struct {
 }
 
 type mobiTagxTags struct {
-	Tag         uint8 // /**< Tag */
-	TagNum      uint8 // /**< Number of values */
-	Bitmask     uint8 /**< Bitmask */
-	ControlByte uint8 /**< EOF control byte */
+	Tag         tagEntry // /**< Tag */
+	TagNum      uint8    // /**< Number of values */
+	Bitmask     uint8    /**< Bitmask */
+	ControlByte uint8    /**< EOF control byte */
 }
 
 func (r *mobiTagx) TagCount() int {

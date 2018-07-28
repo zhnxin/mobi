@@ -1,41 +1,43 @@
 package mobi
 
+type tagEntry uint8
+
 const (
-	TagEntry_END                uint8 = 0
-	TagEntry_Pos                      = 1  // NCX | Position offset for the beginning of NCX record (filepos) Ex: Beginning of a chapter
-	TagEntry_Len                      = 2  // NCX | Record lenght. Ex: Chapter lenght
-	TagEntry_NameOffset               = 3  // NCX | Label text offset in CNCX
-	TagEntry_DepthLvl                 = 4  // NCX | Depth/Level of CNCX
-	TagEntry_KOffs                    = 5  // NCX | kind CNCX offset
-	TagEntry_PosFid                   = 6  // NCX | pos:fid
-	TagEntry_Parent                   = 21 // NCX | Parent
-	TagEntry_Child1                   = 22 // NCX | First child
-	TagEntry_ChildN                   = 23 // NCX | Last child
-	TagEntry_ImageIndex               = 69
-	TagEntry_DescOffset               = 70 // Description offset in cncx
-	TagEntry_AuthorOffset             = 71 // Author offset in cncx
-	TagEntry_ImageCaptionOffset       = 72 // Image caption offset in cncx
-	TagEntry_ImgAttrOffset            = 73 // Image attribution offset in cncx
+	tagEntryEND                tagEntry = 0
+	tagEntryPos                         = 1  // NCX | Position offset for the beginning of NCX record (filepos) Ex: Beginning of a chapter
+	tagEntryLen                         = 2  // NCX | Record lenght. Ex: Chapter lenght
+	tagEntryNameOffset                  = 3  // NCX | Label text offset in CNCX
+	tagEntryDepthLvl                    = 4  // NCX | Depth/Level of CNCX
+	tagEntryKOffs                       = 5  // NCX | kind CNCX offset
+	tagEntryPosFid                      = 6  // NCX | pos:fid
+	tagEntryParent                      = 21 // NCX | Parent
+	tagEntryChild1                      = 22 // NCX | First child
+	tagEntryChildN                      = 23 // NCX | Last child
+	tagEntryImageIndex                  = 69
+	tagEntryDescOffset                  = 70 // Description offset in cncx
+	tagEntryAuthorOffset                = 71 // Author offset in cncx
+	tagEntryImageCaptionOffset          = 72 // Image caption offset in cncx
+	tagEntryImgAttrOffset               = 73 // Image attribution offset in cncx
 )
 
-var tagEntryMap = map[uint8]string{
-	TagEntry_Pos:                "Offset",
-	TagEntry_Len:                "Lenght",
-	TagEntry_NameOffset:         "Label",
-	TagEntry_DepthLvl:           "Depth",
-	TagEntry_KOffs:              "Kind",
-	TagEntry_PosFid:             "Pos:Fid",
-	TagEntry_Parent:             "Parent",
-	TagEntry_Child1:             "First Child",
-	TagEntry_ChildN:             "Last Child",
-	TagEntry_ImageIndex:         "Image Index",
-	TagEntry_DescOffset:         "Description",
-	TagEntry_AuthorOffset:       "Author",
-	TagEntry_ImageCaptionOffset: "Image Caption Offset",
-	TagEntry_ImgAttrOffset:      "Image Attr Offset"}
+var tagEntryMap = map[tagEntry]string{
+	tagEntryPos:                "Offset",
+	tagEntryLen:                "Lenght",
+	tagEntryNameOffset:         "Label",
+	tagEntryDepthLvl:           "Depth",
+	tagEntryKOffs:              "Kind",
+	tagEntryPosFid:             "Pos:Fid",
+	tagEntryParent:             "Parent",
+	tagEntryChild1:             "First Child",
+	tagEntryChildN:             "Last Child",
+	tagEntryImageIndex:         "Image Index",
+	tagEntryDescOffset:         "Description",
+	tagEntryAuthorOffset:       "Author",
+	tagEntryImageCaptionOffset: "Image Caption Offset",
+	tagEntryImgAttrOffset:      "Image Attr Offset"}
 
 type mobiPTagx struct {
-	Tag           uint8
+	Tag           tagEntry
 	TagValueCount uint8
 	ValueCount    uint32
 	ValueBytes    uint32
