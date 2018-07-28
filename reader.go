@@ -166,7 +166,7 @@ func (r *Reader) parseIndexRecord(n uint32) error {
 	}
 
 	/* Ordt Record Parsing */
-	if idx.IdxtEncoding == MOBI_ENC_UTF16 || idx.OrdtEntriesCount > 0 {
+	if idx.IdxtEncoding == EncUTF16 || idx.OrdtEntriesCount > 0 {
 		return errors.New("ORDT parser not implemented")
 	}
 

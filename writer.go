@@ -233,7 +233,7 @@ func (w *mobiBuilder) convertHTMLToRecords() {
 	// Helper function to get the html in chunks of a useful size
 	nextChunk := func() []byte {
 		chunk := bytes.NewBuffer([]byte{})
-		for chunk.Len() < MOBI_MAX_RECORD_SIZE {
+		for chunk.Len() < maxRecordSize {
 			// Read one character at a time to stay below the byte limit - or close to, at least
 			run, _, err := w.bookHTML.ReadRune()
 			if err == io.EOF {
@@ -279,9 +279,9 @@ func makeHTMLRecord(RecN []byte, compression mobiPDHCompression) []byte {
 		return []byte{}
 	}
 
-	if rLen > MOBI_MAX_RECORD_SIZE { // If we overate and got too big
-		Trail := rLen - MOBI_MAX_RECORD_SIZE // get the size difference
-		RecN = append(RecN, byte(Trail))     // and put it at the end of the record, so we know how long the tail is
+	if rLen > maxRecordSize { // If we overate and got too big
+		Trail := rLen - maxRecordSize    // get the size difference
+		RecN = append(RecN, byte(Trail)) // and put it at the end of the record, so we know how long the tail is
 	} else {
 		RecN = append(RecN, 0) // Otherwise, but a zero byte at the end
 	}
@@ -354,7 +354,7 @@ func (w *mobiBuilder) generateCNCX() {
 
 			cncxID := fmt.Sprintf("%03v", id)
 
-			w.Idxt.Offset = append(w.Idxt.Offset, uint16(MOBI_INDX_HEADER_LEN+w.cncxBuffer.Len()))
+			w.Idxt.Offset = append(w.Idxt.Offset, uint16(indxHeaderLen+w.cncxBuffer.Len()))
 
 			w.cncxBuffer.WriteByte(byte(len(cncxID)))              // Len of ID
 			w.cncxBuffer.WriteString(cncxID)                       // ID
@@ -370,7 +370,7 @@ func (w *mobiBuilder) generateCNCX() {
 			w.chapterCount++
 		} else {
 			cncxID := fmt.Sprintf("%03v", w.chapterCount)
-			w.Idxt.Offset = append(w.Idxt.Offset, uint16(MOBI_INDX_HEADER_LEN+w.cncxBuffer.Len()))
+			w.Idxt.Offset = append(w.Idxt.Offset, uint16(indxHeaderLen+w.cncxBuffer.Len()))
 
 			w.cncxBuffer.WriteByte(byte(len(cncxID)))              // Len of ID
 			w.cncxBuffer.WriteString(cncxID)                       // ID
@@ -391,7 +391,7 @@ func (w *mobiBuilder) generateCNCX() {
 		for _, child := range node.SubChapters {
 			fmt.Printf("Child: %v %v %v\n", id, i, child.Title)
 			cncxID := fmt.Sprintf("%03v", w.chapterCount)
-			w.Idxt.Offset = append(w.Idxt.Offset, uint16(MOBI_INDX_HEADER_LEN+w.cncxBuffer.Len()))
+			w.Idxt.Offset = append(w.Idxt.Offset, uint16(indxHeaderLen+w.cncxBuffer.Len()))
 
 			w.cncxBuffer.WriteByte(byte(len(cncxID)))              // Len of ID
 			w.cncxBuffer.WriteString(cncxID)                       // ID
@@ -421,7 +421,7 @@ func (w *mobiBuilder) initPDF(bw *binaryWriter) *mobiBuilder {
 
 	bw.writeBinary(w.Pdf)
 
-	Oft := uint32((w.Pdf.RecordsNum * 8) + MOBI_PALMDB_HEADER_LEN + 2)
+	Oft := uint32((w.Pdf.RecordsNum * 8) + palmDBHeaderLen + 2)
 
 	for i := uint16(0); i < w.Pdf.RecordsNum; i++ {
 
@@ -441,7 +441,7 @@ func (w *mobiBuilder) initPDF(bw *binaryWriter) *mobiBuilder {
 
 func (w *mobiBuilder) initPDH(bw *binaryWriter) *mobiBuilder {
 	w.Pdh.Compression = w.compression
-	w.Pdh.RecordSize = MOBI_MAX_RECORD_SIZE
+	w.Pdh.RecordSize = maxRecordSize
 
 	bw.writeBinary(w.Pdh) // Write
 	return w
@@ -484,7 +484,7 @@ func (w *mobiBuilder) initHeader(bw *binaryWriter) *mobiBuilder {
 	w.Header.ExtraRecordDataFlags = 1 //1
 
 	w.Header.FullNameLength = uint32(len(w.title))
-	w.Header.FullNameOffset = uint32(MOBI_PALMDOC_HEADER_LEN + MOBI_MOBIHEADER_LEN + w.Exth.GetHeaderLenght() + 1)
+	w.Header.FullNameOffset = uint32(palmDocHeaderLen + mobiHeaderLen + w.Exth.GetHeaderLenght() + 1)
 
 	bw.writeBinary(w.Header) // Write
 	return w

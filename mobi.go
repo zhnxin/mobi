@@ -22,11 +22,11 @@ type Mobi struct {
 }
 
 const (
-	MOBI_MAX_RECORD_SIZE    = 4096
-	MOBI_PALMDB_HEADER_LEN  = 78
-	MOBI_INDX_HEADER_LEN    = 192
-	MOBI_PALMDOC_HEADER_LEN = 16
-	MOBI_MOBIHEADER_LEN     = 232
+	maxRecordSize    = 4096
+	palmDBHeaderLen  = 78
+	indxHeaderLen    = 192
+	palmDocHeaderLen = 16
+	mobiHeaderLen    = 232
 )
 
 type mobiRecordOffset struct {
@@ -76,7 +76,10 @@ func (m mobiMagicType) WriteTo(output interface{}) {
 }
 
 const (
-	MOBI_ENC_CP1252 = 1252  /**< cp-1252 encoding */
-	MOBI_ENC_UTF8   = 65001 /**< utf-8 encoding */
-	MOBI_ENC_UTF16  = 65002 /**< utf-16 encoding */
+	// EncCP1252 is CP-1252 encoding
+	EncCP1252 = 1252  /**< cp-1252 encoding */
+	// EncUTF8 is UTF8 encoding
+	EncUTF8   = 65001 /**< utf-8 encoding */
+	// EncUTF16 is UTF16 encoding
+	EncUTF16  = 65002 /**< utf-16 encoding */ 
 )
