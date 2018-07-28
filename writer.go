@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -151,42 +152,8 @@ func (w *MobiWriter) WriteTo(out io.Writer) (n int64, err error) {
 	// Book Records
 	w.Pdh.TextLength = uint32(w.bookHtml.Len())
 
-	makeRecord := func(RecN []byte) []byte {
-		rLen := len(RecN)
-		if rLen == 0 {
-			return []byte{}
-		}
+	w.convertHTMLToRecords()
 
-		if rLen > MOBI_MAX_RECORD_SIZE {
-			Trail := rLen - MOBI_MAX_RECORD_SIZE
-			RecN = append(RecN, byte(Trail))
-		} else {
-			RecN = append(RecN, 0)
-		}
-
-		if w.compression == CompressionPalmDoc {
-			RecN = palmDocLZ77Pack(RecN)
-		}
-
-		return RecN
-	}
-
-	RecN := bytes.NewBuffer([]byte{})
-	for {
-		run, _, err := w.bookHtml.ReadRune()
-		if err == io.EOF {
-			w.AddRecord(makeRecord(RecN.Bytes()))
-			RecN = bytes.NewBuffer([]byte{})
-			break
-		}
-		RecN.WriteRune(run)
-
-		if RecN.Len() >= MOBI_MAX_RECORD_SIZE {
-			w.AddRecord(makeRecord(RecN.Bytes()))
-			RecN = bytes.NewBuffer([]byte{})
-
-		}
-	}
 	w.Pdh.RecordCount = w.RecordCount().UInt16() - 1
 
 	// Index0
@@ -245,6 +212,71 @@ func (w *MobiWriter) WriteTo(out io.Writer) (n int64, err error) {
 		}
 	}
 	return int64(bw.writtenBytes), nil
+}
+
+func (w *MobiWriter) convertHTMLToRecords() {
+
+	// Helper function to get the html in chunks of a useful size
+	nextChunk := func() []byte {
+		chunk := bytes.NewBuffer([]byte{})
+		for chunk.Len() < MOBI_MAX_RECORD_SIZE {
+			// Read one character at a time to stay below the byte limit - or close to, at least
+			run, _, err := w.bookHtml.ReadRune()
+			if err == io.EOF {
+				break
+			}
+			chunk.WriteRune(run)
+		}
+		return chunk.Bytes()
+	}
+
+	// Convert the bookHtml to nice and cozy chunks
+	chunks := [][]byte{}
+	for {
+		chunk := nextChunk()
+		if len(chunk) == 0 {
+			break
+		}
+		chunks = append(chunks, chunk)
+	}
+
+	// Convert chunks to records in parallel, but preserving the ordering
+	records := make([][]byte, len(chunks))
+	wg := sync.WaitGroup{}
+	wg.Add(len(chunks))
+	for i := range chunks {
+		go func(i int) {
+			defer wg.Done()
+			records[i] = makeHTMLRecord(chunks[i], w.compression)
+		}(i)
+	}
+	wg.Wait()
+
+	// Finally, add the records in order
+	for i := range records {
+		w.AddRecord(records[i])
+	}
+}
+
+// makeHTMLRecord converts a slice of the html data to a record
+func makeHTMLRecord(RecN []byte, compression mobiPDHCompression) []byte {
+	rLen := len(RecN)
+	if rLen == 0 {
+		return []byte{}
+	}
+
+	if rLen > MOBI_MAX_RECORD_SIZE { // If we overate and got too big
+		Trail := rLen - MOBI_MAX_RECORD_SIZE // get the size difference
+		RecN = append(RecN, byte(Trail))     // and put it at the end of the record, as a byte??
+	} else {
+		RecN = append(RecN, 0) // Otherwise, but a zero byte at the end
+	}
+
+	if compression == CompressionPalmDoc {
+		RecN = palmDocLZ77Pack(RecN) // Optionally, compress that mofo
+	}
+
+	return RecN // and then return it
 }
 
 func (w *MobiWriter) EmbeddedCount() Mint {
