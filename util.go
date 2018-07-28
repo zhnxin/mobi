@@ -193,13 +193,18 @@ func underlineTitle(x string) string {
 }
 
 func palmDocLZ77Pack(data []byte) []byte {
-	var outB []byte
+	// Allocate an output buffer that already has capacity for the entire input
+	// This avoids spending CPU cycles extending the output buffer through copies
+	// when appending to it.
+	outB := make([]byte, 0, len(data))
 
-	var tailLen = int(data[len(data)-1])
-	var tail = data[(len(data)-1)-tailLen:] /*-multibyte*/
-	data = data[:(len(data)-1)-tailLen]     /* -multibyte*/
+	// Last byte indicates how many bytes we've written past 4k bytes
+	// We keep the tail separate, and do not attempt to compress it
+	tailLen := int(data[len(data)-1])
+	tail := data[(len(data)-1)-tailLen:]
+	data = data[:(len(data)-1)-tailLen]
 
-	var ldata = len(data)
+	ldata := len(data)
 
 	for i := 0; i < ldata; i++ {
 		if i > lz77MaxChunkLen && (ldata-i) > lz77MaxChunkLen {
@@ -271,6 +276,7 @@ func palmDocLZ77Pack(data []byte) []byte {
 			i += len(binseq) - 1
 		}
 	}
+	// Reattach the tail, which includes the length
 	outB = append(outB, tail...)
 	return outB
 }

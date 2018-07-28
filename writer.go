@@ -267,7 +267,7 @@ func makeHTMLRecord(RecN []byte, compression mobiPDHCompression) []byte {
 
 	if rLen > MOBI_MAX_RECORD_SIZE { // If we overate and got too big
 		Trail := rLen - MOBI_MAX_RECORD_SIZE // get the size difference
-		RecN = append(RecN, byte(Trail))     // and put it at the end of the record, as a byte??
+		RecN = append(RecN, byte(Trail))     // and put it at the end of the record, so we know how long the tail is
 	} else {
 		RecN = append(RecN, 0) // Otherwise, but a zero byte at the end
 	}
