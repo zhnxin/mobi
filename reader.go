@@ -139,8 +139,8 @@ func (r *Reader) parseIndexRecord(n uint32) error {
 	}
 
 	/* Tagx Record Parsing + Last CNCX */
-	if idx.Tagx_Offset != 0 {
-		_, err = r.file.Seek(RecPos+int64(idx.Tagx_Offset), 0)
+	if idx.TagxOffset != 0 {
+		_, err = r.file.Seek(RecPos+int64(idx.TagxOffset), 0)
 		if err != nil {
 			return err
 		}
@@ -151,7 +151,7 @@ func (r *Reader) parseIndexRecord(n uint32) error {
 		}
 
 		// Last CNCX record follows TAGX
-		if idx.Cncx_Records_Count > 0 {
+		if idx.CncxRecordsCount > 0 {
 			r.Cncx = mobiCncx{}
 			binary.Read(r.file, binary.BigEndian, &r.Cncx.Len)
 
@@ -166,12 +166,12 @@ func (r *Reader) parseIndexRecord(n uint32) error {
 	}
 
 	/* Ordt Record Parsing */
-	if idx.IdxtEncoding == MOBI_ENC_UTF16 || idx.Ordt_Entries_Count > 0 {
+	if idx.IdxtEncoding == MOBI_ENC_UTF16 || idx.OrdtEntriesCount > 0 {
 		return errors.New("ORDT parser not implemented")
 	}
 
 	/* Ligt Record Parsing */
-	if idx.Ligt_Entries_Count > 0 {
+	if idx.LigtEntriesCount > 0 {
 		return errors.New("LIGT parser not implemented")
 	}
 
@@ -190,7 +190,7 @@ func (r *Reader) parseIndexRecord(n uint32) error {
 
 	//CNCX Data?
 	var Count = 0
-	if idx.IndxType == INDX_TYPE_NORMAL {
+	if idx.IndxType == IndxTypeNormal {
 		//r.file.Seek(RecPos+int64(idx.HeaderLen), 0)
 
 		var PTagxLen = []uint8{0}
@@ -223,7 +223,7 @@ func (r *Reader) parseIndexRecord(n uint32) error {
 
 	//
 	// Process remaining INDX records
-	if idx.IndxType == INDX_TYPE_INFLECTION {
+	if idx.IndxType == IndxTypeInflection {
 		r.parseIndexRecord(n + 1)
 	}
 	//fmt.Printf("%s", )
@@ -420,10 +420,10 @@ func (r *Reader) parsePtagx(data []byte) {
 	for iz, x := range Ptagx {
 		var values []uint32
 
-		if x.Value_Count != 0 {
+		if x.ValueCount != 0 {
 			// Read value_count * values_per_entry variable width values.
 			fmt.Printf("\nDec: ")
-			for i := 0; i < int(x.Value_Count)*int(x.Tag_Value_Count); i++ {
+			for i := 0; i < int(x.ValueCount)*int(x.TagValueCount); i++ {
 				byts, consumed := vwiDec(data, true)
 				data = data[consumed:]
 
@@ -435,7 +435,7 @@ func (r *Reader) parsePtagx(data []byte) {
 			// Convert value_bytes to variable width values.
 			totalConsumed := 0
 			for {
-				if totalConsumed < int(x.Value_Bytes) {
+				if totalConsumed < int(x.ValueBytes) {
 					byts, consumed := vwiDec(data, true)
 					data = data[consumed:]
 
@@ -447,8 +447,8 @@ func (r *Reader) parsePtagx(data []byte) {
 					break
 				}
 			}
-			if totalConsumed != int(x.Value_Bytes) {
-				panic("Error not enough bytes are consumed. Consumed " + strconv.Itoa(totalConsumed) + " out of " + strconv.Itoa(int(x.Value_Bytes)))
+			if totalConsumed != int(x.ValueBytes) {
+				panic("Error not enough bytes are consumed. Consumed " + strconv.Itoa(totalConsumed) + " out of " + strconv.Itoa(int(x.ValueBytes)))
 			}
 		}
 	}

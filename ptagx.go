@@ -35,8 +35,8 @@ var tagEntryMap = map[uint8]string{
 	TagEntry_ImgAttrOffset:      "Image Attr Offset"}
 
 type mobiPTagx struct {
-	Tag             uint8
-	Tag_Value_Count uint8
-	Value_Count     uint32
-	Value_Bytes     uint32
+	Tag           uint8
+	TagValueCount uint8
+	ValueCount    uint32
+	ValueBytes    uint32
 }

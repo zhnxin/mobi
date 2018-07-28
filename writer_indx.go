@@ -50,13 +50,13 @@ func (w *mobiBuilder) generateINDX1() {
 	indx := mobiIndx{}
 	magicIndx.WriteTo(&indx.Identifier)
 	indx.HeaderLen = MOBI_INDX_HEADER_LEN
-	indx.IndxType = INDX_TYPE_INFLECTION
+	indx.IndxType = IndxTypeInflection
 	indx.IdxtCount = 1
 	indx.IdxtEncoding = MOBI_ENC_UTF8
 	indx.SetUnk2 = uint32Max
-	indx.Cncx_Records_Count = 1
+	indx.CncxRecordsCount = 1
 	indx.IdxtEntryCount = uint32(w.chapterCount)
-	indx.Tagx_Offset = MOBI_INDX_HEADER_LEN
+	indx.TagxOffset = MOBI_INDX_HEADER_LEN
 
 	// Idxt
 
@@ -94,7 +94,7 @@ func (w *mobiBuilder) generateINDX2() {
 	indx := mobiIndx{}
 	magicIndx.WriteTo(&indx.Identifier)
 	indx.HeaderLen = MOBI_INDX_HEADER_LEN
-	indx.IndxType = INDX_TYPE_NORMAL
+	indx.IndxType = IndxTypeNormal
 	indx.Unk1 = 1
 	indx.IdxtEncoding = uint32Max
 	indx.SetUnk2 = uint32Max
