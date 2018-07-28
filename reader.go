@@ -32,6 +32,7 @@ func NewReader(filename string) (out *Reader, err error) {
 	return out, out.Parse()
 }
 
+// Parse will parse the fields of the file into this Reader
 func (r *Reader) Parse() (err error) {
 	if err = r.parsePdf(); err != nil {
 		return
@@ -62,7 +63,7 @@ func (r *Reader) parsePdf() error {
 	}
 
 	if r.Pdf.RecordsNum < 1 {
-		return errors.New("Number of records in this file is less than 1.")
+		return errors.New("Number of records in this file is less than 1")
 	}
 
 	r.Offsets = make([]mobiRecordOffset, r.Pdf.RecordsNum)
@@ -85,7 +86,7 @@ func (r *Reader) parsePdh() error {
 
 	// Check and see if there's a record encryption
 	if r.Pdh.Encryption != 0 {
-		return errors.New("Records are encrypted.")
+		return errors.New("Records are encrypted")
 	}
 
 	// Mobi Header
@@ -93,7 +94,7 @@ func (r *Reader) parsePdh() error {
 	if r.MatchMagic(magicMobi) {
 		binary.Read(r.file, binary.BigEndian, &r.Header)
 	} else {
-		return errors.New("Can not find MOBI header. File might be corrupt.")
+		return errors.New("Can not find MOBI header. File might be corrupt")
 	}
 
 	// Current header struct only reads 232 bytes. So if actual header lenght is greater, then we need to skip to Exth.
@@ -253,7 +254,7 @@ func (r *Reader) Peek(n int) Peeker {
 	return buf
 }
 
-// Parse reads/parses Exth meta data records from file
+// ExthParse reads/parses Exth meta data records from file
 func (r *Reader) ExthParse() error {
 	// If next 4 bytes are not EXTH then we have a problem
 	if !r.MatchMagic(magicExth) {
@@ -265,7 +266,7 @@ func (r *Reader) ExthParse() error {
 	binary.Read(r.file, binary.BigEndian, &r.Exth.RecordCount)
 
 	r.Exth.Records = make([]mobiExthRecord, r.Exth.RecordCount)
-	for i, _ := range r.Exth.Records {
+	for i := range r.Exth.Records {
 		binary.Read(r.file, binary.BigEndian, &r.Exth.Records[i].RecordType)
 		binary.Read(r.file, binary.BigEndian, &r.Exth.Records[i].RecordLength)
 
@@ -309,7 +310,7 @@ func (r *Reader) OffsetToRecord(nu uint32) (uint32, error) {
 
 func (r *Reader) parseTagx() error {
 	if !r.MatchMagic(magicTagx) {
-		return errors.New("TAGX record not found at given offset.")
+		return errors.New("TAGX record not found at given offset")
 	}
 
 	r.Tagx = mobiTagx{}
@@ -340,7 +341,7 @@ func (r *Reader) parseTagx() error {
 func (r *Reader) parseIdxt(IdxtCount uint32) error {
 	fmt.Println("parseIdxt called")
 	if !r.MatchMagic(magicIdxt) {
-		return errors.New("IDXT record not found at given offset.")
+		return errors.New("IDXT record not found at given offset")
 	}
 
 	binary.Read(r.file, binary.BigEndian, &r.Idxt.Identifier)
@@ -362,21 +363,21 @@ func (r *Reader) parseIdxt(IdxtCount uint32) error {
 func (r *Reader) parsePtagx(data []byte) {
 	//control_byte_count
 	//tagx
-	control_bytes := data[:r.Tagx.ControlByteCount]
+	controlBytes := data[:r.Tagx.ControlByteCount]
 	data = data[r.Tagx.ControlByteCount:]
 
 	var Ptagx []mobiPTagx //= make([]mobiPTagx, r.Tagx.TagCount())
 
 	for _, x := range r.Tagx.Tags {
 		if x.Control_Byte == 0x01 {
-			control_bytes = control_bytes[1:]
+			controlBytes = controlBytes[1:]
 			continue
 		}
 
-		value := control_bytes[0] & x.Bitmask
+		value := controlBytes[0] & x.Bitmask
 		if value != 0 {
-			var value_count uint32
-			var value_bytes uint32
+			var valCount uint32
+			var valBytes uint32
 
 			if value == x.Bitmask {
 				if setBits[x.Bitmask] > 1 {
@@ -386,11 +387,11 @@ func (r *Reader) parsePtagx(data []byte) {
 					// the value count!) which will contain the corresponding
 					// variable width values.
 					var consumed uint32
-					value_bytes, consumed = vwiDec(data, true)
+					valBytes, consumed = vwiDec(data, true)
 					//fmt.Printf("\nConsumed %v", consumed)
 					data = data[consumed:]
 				} else {
-					value_count = 1
+					valCount = 1
 				}
 			} else {
 				mask := x.Bitmask
@@ -402,10 +403,10 @@ func (r *Reader) parsePtagx(data []byte) {
 					mask >>= 1
 					value >>= 1
 				}
-				value_count = uint32(value)
+				valCount = uint32(value)
 			}
 
-			Ptagx = append(Ptagx, mobiPTagx{x.Tag, x.TagNum, value_count, value_bytes})
+			Ptagx = append(Ptagx, mobiPTagx{x.Tag, x.TagNum, valCount, valBytes})
 			//						ptagx[ptagx_count].tag = tagx->tags[i].tag;
 			//       ptagx[ptagx_count].tag_value_count = tagx->tags[i].values_count;
 			//       ptagx[ptagx_count].value_count = value_count;
@@ -432,13 +433,13 @@ func (r *Reader) parsePtagx(data []byte) {
 			}
 		} else {
 			// Convert value_bytes to variable width values.
-			total_consumed := 0
+			totalConsumed := 0
 			for {
-				if total_consumed < int(x.Value_Bytes) {
+				if totalConsumed < int(x.Value_Bytes) {
 					byts, consumed := vwiDec(data, true)
 					data = data[consumed:]
 
-					total_consumed += int(consumed)
+					totalConsumed += int(consumed)
 
 					values = append(values, byts)
 					IndxEntry = append(IndxEntry, mobiIndxEntry{x.Tag, byts})
@@ -446,8 +447,8 @@ func (r *Reader) parsePtagx(data []byte) {
 					break
 				}
 			}
-			if total_consumed != int(x.Value_Bytes) {
-				panic("Error not enough bytes are consumed. Consumed " + strconv.Itoa(total_consumed) + " out of " + strconv.Itoa(int(x.Value_Bytes)))
+			if totalConsumed != int(x.Value_Bytes) {
+				panic("Error not enough bytes are consumed. Consumed " + strconv.Itoa(totalConsumed) + " out of " + strconv.Itoa(int(x.Value_Bytes)))
 			}
 		}
 	}
