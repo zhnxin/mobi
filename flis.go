@@ -19,19 +19,19 @@ type mobiFlis struct { //  RECORD -2
 	Fixed9     uint32 //UINT   fixed10 <comment="fixed value -1">;
 } //FLISRECORD;
 
-func (w *MobiWriter) generateFlis() []byte {
+func (w *mobiBuilder) generateFlis() []byte {
 	c := mobiFlis{}
 	c.Identifier = 1179404627 //StringToBytes("FLIS", &c.Identifier)
 	c.Fixed0 = 8
 	c.Fixed1 = 65
 	//c.Fixed2
 	//c.Fixed3
-	c.Fixed4 = 4294967295
+	c.Fixed4 = uint32Max
 	c.Fixed5 = 1
 	c.Fixed6 = 3
 	c.Fixed7 = 3
 	c.Fixed8 = 1
-	c.Fixed9 = 4294967295
+	c.Fixed9 = uint32Max
 
 	buf := new(bytes.Buffer)
 	binary.Write(buf, binary.BigEndian, c)

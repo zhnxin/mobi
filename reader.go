@@ -9,12 +9,16 @@ import (
 	"strconv"
 )
 
-type MobiReader struct {
+// Reader allows for reading a Mobi file
+type Reader struct {
+	file     *os.File
+	fileStat os.FileInfo
 	Mobi
 }
 
-func NewReader(filename string) (out *MobiReader, err error) {
-	out = &MobiReader{}
+// NewReader constructs a new reader
+func NewReader(filename string) (out *Reader, err error) {
+	out = &Reader{}
 	out.file, err = os.Open(filename)
 	if err != nil {
 		return nil, err
@@ -28,7 +32,7 @@ func NewReader(filename string) (out *MobiReader, err error) {
 	return out, out.Parse()
 }
 
-func (r *MobiReader) Parse() (err error) {
+func (r *Reader) Parse() (err error) {
 	if err = r.parsePdf(); err != nil {
 		return
 	}
@@ -49,7 +53,7 @@ func (r *MobiReader) Parse() (err error) {
 }
 
 // parseHeader reads Palm Database Format header, and record offsets
-func (r *MobiReader) parsePdf() error {
+func (r *Reader) parsePdf() error {
 	//First we read PDF Header, this will help us parse subsequential data
 	//binary.Read will take struct and fill it with data from mobi File
 	err := binary.Read(r.file, binary.BigEndian, &r.Pdf)
@@ -74,7 +78,7 @@ func (r *MobiReader) parsePdf() error {
 }
 
 // parsePdh processes record 0 that contains PalmDoc Header, Mobi Header and Exth meta data
-func (r *MobiReader) parsePdh() error {
+func (r *Reader) parsePdh() error {
 	// Palm Doc Header
 	// Now we go onto reading record 0 that contains Palm Doc Header, Mobi Header, Exth Header...
 	binary.Read(r.file, binary.BigEndian, &r.Pdh)
@@ -109,7 +113,7 @@ func (r *MobiReader) parsePdh() error {
 	return nil
 }
 
-func (r *MobiReader) parseIndexRecord(n uint32) error {
+func (r *Reader) parseIndexRecord(n uint32) error {
 	_, err := r.OffsetToRecord(n)
 	if err != nil {
 		return err
@@ -150,18 +154,18 @@ func (r *MobiReader) parseIndexRecord(n uint32) error {
 			r.Cncx = mobiCncx{}
 			binary.Read(r.file, binary.BigEndian, &r.Cncx.Len)
 
-			r.Cncx.Id = make([]uint8, r.Cncx.Len)
-			binary.Read(r.file, binary.LittleEndian, &r.Cncx.Id)
+			r.Cncx.ID = make([]uint8, r.Cncx.Len)
+			binary.Read(r.file, binary.LittleEndian, &r.Cncx.ID)
 			r.file.Seek(1, 1) //Skip 0x0 termination
 
-			binary.Read(r.file, binary.BigEndian, &r.Cncx.NCX_Count)
+			binary.Read(r.file, binary.BigEndian, &r.Cncx.NCXCount)
 
 			// PrintStruct(r.Cncx)
 		}
 	}
 
 	/* Ordt Record Parsing */
-	if idx.Idxt_Encoding == MOBI_ENC_UTF16 || idx.Ordt_Entries_Count > 0 {
+	if idx.IdxtEncoding == MOBI_ENC_UTF16 || idx.Ordt_Entries_Count > 0 {
 		return errors.New("ORDT parser not implemented")
 	}
 
@@ -171,13 +175,13 @@ func (r *MobiReader) parseIndexRecord(n uint32) error {
 	}
 
 	/* Idxt Record Parsing */
-	if idx.Idxt_Count > 0 {
-		_, err = r.file.Seek(RecPos+int64(idx.Idxt_Offset), 0)
+	if idx.IdxtCount > 0 {
+		_, err = r.file.Seek(RecPos+int64(idx.IdxtOffset), 0)
 		if err != nil {
 			return err
 		}
 
-		err = r.parseIdxt(idx.Idxt_Count)
+		err = r.parseIdxt(idx.IdxtCount)
 		if err != nil {
 			return err
 		}
@@ -185,7 +189,7 @@ func (r *MobiReader) parseIndexRecord(n uint32) error {
 
 	//CNCX Data?
 	var Count = 0
-	if idx.Indx_Type == INDX_TYPE_NORMAL {
+	if idx.IndxType == INDX_TYPE_NORMAL {
 		//r.file.Seek(RecPos+int64(idx.HeaderLen), 0)
 
 		var PTagxLen = []uint8{0}
@@ -199,7 +203,7 @@ func (r *MobiReader) parseIndexRecord(n uint32) error {
 			PTagxLabel := make([]uint8, PTagxLen[0])
 			r.file.Read(PTagxLabel)
 
-			PTagxLen1 := uint16(idx.Idxt_Offset) - r.Idxt.Offset[i]
+			PTagxLen1 := uint16(idx.IdxtOffset) - r.Idxt.Offset[i]
 			if i+1 < len(r.Idxt.Offset) {
 				PTagxLen1 = r.Idxt.Offset[i+1] - r.Idxt.Offset[i]
 			}
@@ -218,7 +222,7 @@ func (r *MobiReader) parseIndexRecord(n uint32) error {
 
 	//
 	// Process remaining INDX records
-	if idx.Indx_Type == INDX_TYPE_INFLECTION {
+	if idx.IndxType == INDX_TYPE_INFLECTION {
 		r.parseIndexRecord(n + 1)
 	}
 	//fmt.Printf("%s", )
@@ -234,7 +238,7 @@ func (r *MobiReader) parseIndexRecord(n uint32) error {
 }
 
 // MatchMagic matches next N bytes (based on lenght of magic word)
-func (r *MobiReader) MatchMagic(magic mobiMagicType) bool {
+func (r *Reader) MatchMagic(magic mobiMagicType) bool {
 	if r.Peek(len(magic)).Magic() == magic {
 		return true
 	}
@@ -242,7 +246,7 @@ func (r *MobiReader) MatchMagic(magic mobiMagicType) bool {
 }
 
 // Peek returns next N bytes without advancing the reader.
-func (r *MobiReader) Peek(n int) Peeker {
+func (r *Reader) Peek(n int) Peeker {
 	buf := make([]uint8, n)
 	r.file.Read(buf)
 	r.file.Seek(int64(n)*-1, 1)
@@ -250,7 +254,7 @@ func (r *MobiReader) Peek(n int) Peeker {
 }
 
 // Parse reads/parses Exth meta data records from file
-func (r *MobiReader) ExthParse() error {
+func (r *Reader) ExthParse() error {
 	// If next 4 bytes are not EXTH then we have a problem
 	if !r.MatchMagic(magicExth) {
 		return errors.New("Currect reading position does not contain EXTH record")
@@ -285,7 +289,7 @@ func (r *MobiReader) ExthParse() error {
 }
 
 // OffsetToRecord sets reading position to record N, returns total record lenght
-func (r *MobiReader) OffsetToRecord(nu uint32) (uint32, error) {
+func (r *Reader) OffsetToRecord(nu uint32) (uint32, error) {
 	n := int(nu)
 	if n > int(r.Pdf.RecordsNum)-1 {
 		return 0, errors.New("Record ID requested is greater than total amount of records")
@@ -303,7 +307,7 @@ func (r *MobiReader) OffsetToRecord(nu uint32) (uint32, error) {
 	return RecLen - r.Offsets[n].Offset, err
 }
 
-func (r *MobiReader) parseTagx() error {
+func (r *Reader) parseTagx() error {
 	if !r.MatchMagic(magicTagx) {
 		return errors.New("TAGX record not found at given offset.")
 	}
@@ -333,7 +337,7 @@ func (r *MobiReader) parseTagx() error {
 	return nil
 }
 
-func (r *MobiReader) parseIdxt(IdxtCount uint32) error {
+func (r *Reader) parseIdxt(IdxtCount uint32) error {
 	fmt.Println("parseIdxt called")
 	if !r.MatchMagic(magicIdxt) {
 		return errors.New("IDXT record not found at given offset.")
@@ -355,7 +359,7 @@ func (r *MobiReader) parseIdxt(IdxtCount uint32) error {
 	return nil
 }
 
-func (r *MobiReader) parsePtagx(data []byte) {
+func (r *Reader) parsePtagx(data []byte) {
 	//control_byte_count
 	//tagx
 	control_bytes := data[:r.Tagx.ControlByteCount]

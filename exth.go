@@ -194,10 +194,10 @@ type mobiExthMeta struct {
 	Name string
 }
 
-func (w *mobiExth) GetHeaderLenght() int {
+func (e *mobiExth) GetHeaderLenght() int {
 	elen := 12
 
-	for _, k := range w.Records {
+	for _, k := range e.Records {
 		elen += int(k.RecordLength)
 	}
 
@@ -211,7 +211,7 @@ func (e *mobiExth) Add(recType uint32, Value interface{}) *mobiExth {
 	e.RecordCount++
 
 	var MetaType = getExthMetaByTag(recType)
-	var ExthRec mobiExthRecord = mobiExthRecord{RecordType: recType}
+	var ExthRec = mobiExthRecord{RecordType: recType}
 
 	switch MetaType.Type {
 	case EXTH_TYPE_BINARY:

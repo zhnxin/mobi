@@ -20,7 +20,7 @@ type mobiFcis struct { //  RECORD -1
 	Fixed10    uint32 //UINT   fixed11 <comment="fixed value 0">;
 } //FCISRECORD;*/
 
-func (w *MobiWriter) generateFcis() []byte {
+func (w *mobiBuilder) generateFcis() []byte {
 	c := mobiFcis{}
 	c.Identifier = 1178814803 //StringToBytes("FLIS", &c.Identifier)
 	c.Fixed0 = 20

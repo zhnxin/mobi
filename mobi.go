@@ -1,14 +1,11 @@
 package mobi
 
 import (
-	"os"
 	"reflect"
 )
 
+// Mobi is the core struct of a mobi document
 type Mobi struct {
-	file     *os.File
-	fileStat os.FileInfo
-
 	Pdf     mobiPDF            // Palm Database Format: http://wiki.mobileread.com/wiki/PDB#Palm_Database_Format
 	Offsets []mobiRecordOffset // Offsets for all the records. Starting from beginning of a file.
 	Pdh     mobiPDH

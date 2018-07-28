@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 )
 
-func (w *MobiWriter) chapterIsDeep() bool {
+func (w *mobiBuilder) chapterIsDeep() bool {
 	for _, node := range w.chapters {
 		if node.SubChapterCount() > 0 {
 			return true
@@ -14,7 +14,7 @@ func (w *MobiWriter) chapterIsDeep() bool {
 	return false
 }
 
-func (w *MobiWriter) writeINDX_1() {
+func (w *mobiBuilder) generateINDX1() {
 	buf := new(bytes.Buffer)
 	// Tagx
 	tagx := mobiTagx{}
@@ -43,25 +43,21 @@ func (w *MobiWriter) writeINDX_1() {
 	tagx.HeaderLenght = uint32(tagx.TagCount()*4) + 12
 
 	TagX := new(bytes.Buffer)
-	binary.Write(TagX, binary.BigEndian, tagx.Identifier)
-	binary.Write(TagX, binary.BigEndian, tagx.HeaderLenght)
-	binary.Write(TagX, binary.BigEndian, tagx.ControlByteCount)
-	binary.Write(TagX, binary.BigEndian, tagx.Tags)
+	binary.Write(TagX, binary.BigEndian, tagx)
 
 	// Indx
 	//	IndxBin := new(bytes.Buffer)
 	indx := mobiIndx{}
 	magicIndx.WriteTo(&indx.Identifier)
 	indx.HeaderLen = MOBI_INDX_HEADER_LEN
-	indx.Indx_Type = INDX_TYPE_INFLECTION
-	indx.Idxt_Count = 1
-	indx.Idxt_Encoding = MOBI_ENC_UTF8
-	indx.SetUnk2 = 4294967295
+	indx.IndxType = INDX_TYPE_INFLECTION
+	indx.IdxtCount = 1
+	indx.IdxtEncoding = MOBI_ENC_UTF8
+	indx.SetUnk2 = uint32Max
 	indx.Cncx_Records_Count = 1
-	indx.Idxt_Entry_Count = uint32(w.chapterCount)
+	indx.IdxtEntryCount = uint32(w.chapterCount)
 	indx.Tagx_Offset = MOBI_INDX_HEADER_LEN
 
-	//binary.Write(IndxBin, binary.BigEndian, indx)
 	// Idxt
 
 	/************/
@@ -73,14 +69,9 @@ func (w *MobiWriter) writeINDX_1() {
 	Rec = Rec[0 : Rec[0]+1]
 	RLen := len(Rec)
 
-	//w.File.Write(Rec)
-
 	Padding := (RLen + 2) % 4
 
-	//IDXT_OFFSET, := w.File.Seek(0, 1)
-
-	indx.Idxt_Offset = MOBI_INDX_HEADER_LEN + uint32(TagX.Len()) + uint32(RLen+2+Padding) // Offset to Idxt Record
-	//w.Idxt1.Offset = []uint16{uint16(offset)}
+	indx.IdxtOffset = MOBI_INDX_HEADER_LEN + uint32(TagX.Len()) + uint32(RLen+2+Padding) // Offset to Idxt Record
 	/************/
 
 	binary.Write(buf, binary.BigEndian, indx)
@@ -88,32 +79,27 @@ func (w *MobiWriter) writeINDX_1() {
 	buf.Write(Rec)
 	binary.Write(buf, binary.BigEndian, uint16(IdxtLast))
 
-	for Padding != 0 {
-		buf.Write([]byte{0})
-		Padding--
-	}
+	buf.Write(make([]byte, Padding))
 
 	buf.WriteString(magicIdxt.String())
 
 	binary.Write(buf, binary.BigEndian, uint16(MOBI_INDX_HEADER_LEN+uint32(TagX.Len())))
 
-	//ioutil.WriteFile("TAGX_TEST", TagX.Bytes(), 0644)
-	//ioutil.WriteFile("INDX_TEST", IndxBin.Bytes(), 0644)
-	buf.Write([]uint8{0, 0})
+	buf.Write([]byte{0, 0})
 	w.Header.IndxRecodOffset = w.AddRecord(buf.Bytes()).UInt32()
 }
 
-func (w *MobiWriter) writeINDX_2() {
+func (w *mobiBuilder) generateINDX2() {
 	buf := new(bytes.Buffer)
 	indx := mobiIndx{}
 	magicIndx.WriteTo(&indx.Identifier)
 	indx.HeaderLen = MOBI_INDX_HEADER_LEN
-	indx.Indx_Type = INDX_TYPE_NORMAL
-	indx.Unk1 = uint32(1)
-	indx.Idxt_Encoding = 4294967295
-	indx.SetUnk2 = 4294967295
-	indx.Idxt_Offset = uint32(MOBI_INDX_HEADER_LEN + w.cncxBuffer.Len())
-	indx.Idxt_Count = uint32(len(w.Idxt.Offset))
+	indx.IndxType = INDX_TYPE_NORMAL
+	indx.Unk1 = 1
+	indx.IdxtEncoding = uint32Max
+	indx.SetUnk2 = uint32Max
+	indx.IdxtOffset = uint32(MOBI_INDX_HEADER_LEN + w.cncxBuffer.Len())
+	indx.IdxtCount = uint32(len(w.Idxt.Offset))
 
 	binary.Write(buf, binary.BigEndian, indx)
 	buf.Write(w.cncxBuffer.Bytes())
@@ -123,7 +109,6 @@ func (w *MobiWriter) writeINDX_2() {
 		//Those offsets are not relative INDX record.
 		//So we need to adjust that.
 		binary.Write(buf, binary.BigEndian, offset) //+MOBI_INDX_HEADER_LEN)
-
 	}
 
 	Padding := (len(w.Idxt.Offset) + 4) % 4

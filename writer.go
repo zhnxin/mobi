@@ -7,14 +7,32 @@ import (
 	"io"
 	"io/ioutil"
 	"math/rand"
-	"os"
 	"sync"
 	"time"
 )
 
-type MobiWriter struct {
-	file *os.File
+const (
+	uint32Max = 0xFFFFFFFF
+)
 
+// Builder allows for building of MOBI book output
+type Builder interface {
+	AddCover(cover, thumbnail string)
+	Compression(i mobiPDHCompression)
+	CSS(css string)
+	NewExthRecord(recType ExthType, value interface{})
+	Title(i string)
+	NewChapter(title string, text []byte) Chapter
+	WriteTo(out io.Writer) (n int64, err error)
+}
+
+// NewBuilder constructs a new builder
+func NewBuilder() Builder {
+	return &mobiBuilder{}
+}
+
+// mobiBuilder allows for writing a mobi document
+type mobiBuilder struct {
 	timestamp   uint32
 	title       string
 	compression mobiPDHCompression
@@ -24,43 +42,47 @@ type MobiWriter struct {
 
 	css string
 
-	bookHtml *bytes.Buffer
+	bookHTML *bytes.Buffer
 
 	cncxBuffer      *bytes.Buffer
 	cncxLabelBuffer *bytes.Buffer
 
-	// Text Records
-	Records [][]uint8
+	// Text records
+	records [][]byte
 
-	Embedded []EmbeddedData
+	embedded []EmbeddedData
 	Mobi
 }
 
+// EmbType is the type of embedded data
 type EmbType int
 
 const (
+	// EmbCover is a cover image
 	EmbCover EmbType = iota
+	// EmbThumb is a thumbnail image
 	EmbThumb
 )
 
+// EmbeddedData holds an embedded blob
 type EmbeddedData struct {
 	Type EmbType
 	Data []byte
 }
 
-func (w *MobiWriter) embed(FileType EmbType, Data []byte) int {
-	w.Embedded = append(w.Embedded, EmbeddedData{Type: FileType, Data: Data})
-	return len(w.Embedded) - 1
+func (w *mobiBuilder) embed(FileType EmbType, Data []byte) int {
+	w.embedded = append(w.embedded, EmbeddedData{Type: FileType, Data: Data})
+	return len(w.embedded) - 1
 }
 
 //NewExthRecord adds a new exth record to the book
-func (w *MobiWriter) NewExthRecord(recType ExthType, value interface{}) {
+func (w *mobiBuilder) NewExthRecord(recType ExthType, value interface{}) {
 	w.Exth.Add(uint32(recType), value)
 }
 
 // AddCover sets the cover image
 // cover and thumbnail are both filenames
-func (w *MobiWriter) AddCover(cover, thumbnail string) {
+func (w *mobiBuilder) AddCover(cover, thumbnail string) {
 	coverData, err := ioutil.ReadFile(cover)
 	if err != nil {
 		panic("Can not load file " + cover)
@@ -72,74 +94,54 @@ func (w *MobiWriter) AddCover(cover, thumbnail string) {
 
 	w.embed(EmbCover, coverData)
 	w.embed(EmbThumb, thumbnailData)
-}
 
-// NewWriter initializes a writer. Takes a pointer to file and book title/database name
-func NewWriter(filename string) (writer *MobiWriter, err error) {
-	writer = &MobiWriter{}
-	writer.file, err = os.Create(filename)
-	if err != nil {
-		return nil, err
-	}
-	return
 }
 
 // Title sets the title of the book being written
-func (w *MobiWriter) Title(i string) *MobiWriter {
+func (w *mobiBuilder) Title(i string) {
 	w.title = i
-	return w
 }
 
 // CSS declares the stylesheet (if any) to use for the book
-func (w *MobiWriter) CSS(css string) *MobiWriter {
+func (w *mobiBuilder) CSS(css string) {
 	w.css = css
-	return w
 }
 
 // Compression sets the compression mode to use
-func (w *MobiWriter) Compression(i mobiPDHCompression) *MobiWriter {
+func (w *mobiBuilder) Compression(i mobiPDHCompression) {
 	w.compression = i
-	return w
 }
 
 // AddRecord adds a new record. Returns Id
-func (w *MobiWriter) AddRecord(data []uint8) Mint {
+func (w *mobiBuilder) AddRecord(data []uint8) Mint {
 	//	fmt.Printf("Adding record : %s\n", data)
-	w.Records = append(w.Records, data)
+	w.records = append(w.records, data)
 	return w.RecordCount() - 1
 }
 
-func (w *MobiWriter) RecordCount() Mint {
-	return Mint(len(w.Records))
-}
-
-// Write preserves backwards compatibility of the interface and writes to a file if created with NewWriter
-func (w *MobiWriter) Write() {
-	if w.file == nil {
-		panic("Only works if you used NewWriter to output to file. Recommend using WriteTo instead")
-	}
-	_, err := w.WriteTo(w.file)
-	if err != nil {
-		panic(err)
-	}
+// RecordCount yields the number of records in the MobiWriter
+func (w *mobiBuilder) RecordCount() Mint {
+	return Mint(len(w.records))
 }
 
 // WriteTo will write the status of this MobiWriter to the provided Writer
-func (w *MobiWriter) WriteTo(out io.Writer) (n int64, err error) {
+func (w *mobiBuilder) WriteTo(out io.Writer) (n int64, err error) {
 
 	bw := &binaryWriter{out: out}
 
+	w.createTOCChapter()
+
 	// Generate HTML file
-	w.bookHtml = new(bytes.Buffer)
+	w.bookHTML = new(bytes.Buffer)
 	stylePart := ""
 	if len(w.css) > 0 {
 		stylePart = fmt.Sprintf("<style>%s</style>", w.css)
 	}
-	w.bookHtml.WriteString(fmt.Sprintf("<html><head>%s</head><body>", stylePart))
+	w.bookHTML.WriteString(fmt.Sprintf("<html><head>%s</head><body>", stylePart))
 	for i := range w.chapters {
-		w.chapters[i].generateHTML(w.bookHtml)
+		w.chapters[i].generateHTML(w.bookHTML)
 	}
-	w.bookHtml.WriteString("</body></html>")
+	w.bookHTML.WriteString("</body></html>")
 
 	// Generate MOBI
 	w.generateCNCX() // Generates CNCX
@@ -150,7 +152,7 @@ func (w *MobiWriter) WriteTo(out io.Writer) (n int64, err error) {
 	w.AddRecord([]uint8{0})
 
 	// Book Records
-	w.Pdh.TextLength = uint32(w.bookHtml.Len())
+	w.Pdh.TextLength = uint32(w.bookHTML.Len())
 
 	w.convertHTMLToRecords()
 
@@ -160,8 +162,8 @@ func (w *MobiWriter) WriteTo(out io.Writer) (n int64, err error) {
 	w.AddRecord([]uint8{0, 0})
 	w.Header.FirstNonBookIndex = w.RecordCount().UInt32()
 
-	w.writeINDX_1()
-	w.writeINDX_2()
+	w.generateINDX1()
+	w.generateINDX2()
 
 	// Image
 	//FirstImageIndex : array index
@@ -169,8 +171,8 @@ func (w *MobiWriter) WriteTo(out io.Writer) (n int64, err error) {
 	if w.EmbeddedCount() > 0 {
 		w.Header.FirstImageIndex = w.RecordCount().UInt32()
 		//		c.Mh.FirstImageIndex = i + 2
-		for i, e := range w.Embedded {
-			w.Records = append(w.Records, e.Data)
+		for i, e := range w.embedded {
+			w.records = append(w.records, e.Data)
 			switch e.Type {
 			case EmbCover:
 				w.Exth.Add(EXTH_KF8COVERURI, fmt.Sprintf("kindle:embed:%04d", i+1))
@@ -180,7 +182,7 @@ func (w *MobiWriter) WriteTo(out io.Writer) (n int64, err error) {
 			}
 		}
 	} else {
-		w.Header.FirstImageIndex = 4294967295
+		w.Header.FirstImageIndex = uint32Max
 	}
 
 	// CNCX Record
@@ -191,7 +193,7 @@ func (w *MobiWriter) WriteTo(out io.Writer) (n int64, err error) {
 	w.Header.LastContentRecordNumber = w.RecordCount().UInt16() - 1
 	w.Header.FlisRecordIndex = w.AddRecord(w.generateFlis()).UInt32() // Flis
 	w.Header.FcisRecordIndex = w.AddRecord(w.generateFcis()).UInt32() // Fcis
-	w.AddRecord([]uint8{0xE9, 0x8E, 0x0D, 0x0A})                      // EOF
+	w.AddRecord([]byte{0xE9, 0x8E, 0x0D, 0x0A})                       // EOF
 
 	w.initPDF(bw)
 	w.initPDH(bw)
@@ -206,7 +208,7 @@ func (w *MobiWriter) WriteTo(out io.Writer) (n int64, err error) {
 		return bw.written(), err
 	}
 	for i := 1; i < w.RecordCount().Int(); i++ {
-		_, err := bw.Write(w.Records[i])
+		_, err := bw.Write(w.records[i])
 		if err != nil {
 			return bw.written(), err
 		}
@@ -214,14 +216,26 @@ func (w *MobiWriter) WriteTo(out io.Writer) (n int64, err error) {
 	return int64(bw.writtenBytes), nil
 }
 
-func (w *MobiWriter) convertHTMLToRecords() {
+func (w *mobiBuilder) createTOCChapter() {
+	chapters := w.chapterCount
+	buf := bytes.Buffer{}
+	if chapters > 0 {
+		for i := range w.chapters {
+			ch := w.chapters[i]
+			buf.WriteString(fmt.Sprintf("<a href='#%d'>%s</a><br>", ch.ID, ch.Title))
+		}
+	}
+	w.NewChapter("Table of Contents", buf.Bytes())
+}
+
+func (w *mobiBuilder) convertHTMLToRecords() {
 
 	// Helper function to get the html in chunks of a useful size
 	nextChunk := func() []byte {
 		chunk := bytes.NewBuffer([]byte{})
 		for chunk.Len() < MOBI_MAX_RECORD_SIZE {
 			// Read one character at a time to stay below the byte limit - or close to, at least
-			run, _, err := w.bookHtml.ReadRune()
+			run, _, err := w.bookHTML.ReadRune()
 			if err == io.EOF {
 				break
 			}
@@ -279,11 +293,12 @@ func makeHTMLRecord(RecN []byte, compression mobiPDHCompression) []byte {
 	return RecN // and then return it
 }
 
-func (w *MobiWriter) EmbeddedCount() Mint {
-	return Mint(len(w.Embedded))
+// EmbeddedCount yields the number of embedded elements
+func (w *mobiBuilder) EmbeddedCount() Mint {
+	return Mint(len(w.embedded))
 }
 
-func (w *MobiWriter) generateCNCX() {
+func (w *mobiBuilder) generateCNCX() {
 	/*
 		Single  [Off, Len, Label, Depth]
 		Parent: [Off, Len, Label, Depth] + [FirstChild, Last Child]
@@ -328,21 +343,21 @@ func (w *MobiWriter) generateCNCX() {
 		mobiTagxMap[TagEntry_Parent],
 		mobiTagxMap[TagEntry_END]}
 
-	var Id = len(w.chapters)
+	var id = len(w.chapters)
 
 	for _, node := range w.chapters {
 		if node.SubChapterCount() > 0 {
-			ch1 := Id
-			chN := Id + node.SubChapterCount() - 1
-			fmt.Printf("Parent: %v %v %v [CHILDREN: %v %v]\n", Id, node.SubChapterCount(), node.Title, ch1, chN)
-			Id += node.SubChapterCount()
+			ch1 := id
+			chN := id + node.SubChapterCount() - 1
+			fmt.Printf("Parent: %v %v %v [CHILDREN: %v %v]\n", id, node.SubChapterCount(), node.Title, ch1, chN)
+			id += node.SubChapterCount()
 
-			CNCX_ID := fmt.Sprintf("%03v", Id)
+			cncxID := fmt.Sprintf("%03v", id)
 
 			w.Idxt.Offset = append(w.Idxt.Offset, uint16(MOBI_INDX_HEADER_LEN+w.cncxBuffer.Len()))
 
-			w.cncxBuffer.WriteByte(byte(len(CNCX_ID)))             // Len of ID
-			w.cncxBuffer.WriteString(CNCX_ID)                      // ID
+			w.cncxBuffer.WriteByte(byte(len(cncxID)))              // Len of ID
+			w.cncxBuffer.WriteString(cncxID)                       // ID
 			w.cncxBuffer.WriteByte(controlByte(TagxParent)[0])     // Controll Byte
 			w.cncxBuffer.Write(vwiEncInt(node.RecordOffset))       // Record offset
 			w.cncxBuffer.Write(vwiEncInt(node.Len))                // Lenght of a record
@@ -354,11 +369,11 @@ func (w *MobiWriter) generateCNCX() {
 			w.cncxBuffer.Write(vwiEncInt(chN))                     // ChildN
 			w.chapterCount++
 		} else {
-			CNCX_ID := fmt.Sprintf("%03v", w.chapterCount)
+			cncxID := fmt.Sprintf("%03v", w.chapterCount)
 			w.Idxt.Offset = append(w.Idxt.Offset, uint16(MOBI_INDX_HEADER_LEN+w.cncxBuffer.Len()))
 
-			w.cncxBuffer.WriteByte(byte(len(CNCX_ID)))             // Len of ID
-			w.cncxBuffer.WriteString(CNCX_ID)                      // ID
+			w.cncxBuffer.WriteByte(byte(len(cncxID)))              // Len of ID
+			w.cncxBuffer.WriteString(cncxID)                       // ID
 			w.cncxBuffer.WriteByte(controlByte(TagxSingle)[0])     // Controll Byte
 			w.cncxBuffer.Write(vwiEncInt(node.RecordOffset))       // Record offset
 			w.cncxBuffer.Write(vwiEncInt(node.Len))                // Lenght of a record
@@ -370,16 +385,16 @@ func (w *MobiWriter) generateCNCX() {
 		}
 
 	}
-	Id = len(w.chapters)
+	id = len(w.chapters)
 
 	for i, node := range w.chapters {
 		for _, child := range node.SubChapters {
-			fmt.Printf("Child: %v %v %v\n", Id, i, child.Title)
-			CNCX_ID := fmt.Sprintf("%03v", w.chapterCount)
+			fmt.Printf("Child: %v %v %v\n", id, i, child.Title)
+			cncxID := fmt.Sprintf("%03v", w.chapterCount)
 			w.Idxt.Offset = append(w.Idxt.Offset, uint16(MOBI_INDX_HEADER_LEN+w.cncxBuffer.Len()))
 
-			w.cncxBuffer.WriteByte(byte(len(CNCX_ID)))             // Len of ID
-			w.cncxBuffer.WriteString(CNCX_ID)                      // ID
+			w.cncxBuffer.WriteByte(byte(len(cncxID)))              // Len of ID
+			w.cncxBuffer.WriteString(cncxID)                       // ID
 			w.cncxBuffer.WriteByte(controlByte(TagxChild)[0])      // Controll Byte
 			w.cncxBuffer.Write(vwiEncInt(child.RecordOffset))      // Record offset
 			w.cncxBuffer.Write(vwiEncInt(child.Len))               // Lenght of a record
@@ -389,12 +404,12 @@ func (w *MobiWriter) generateCNCX() {
 			w.cncxBuffer.Write(vwiEncInt(1))                       // Depth
 			w.cncxBuffer.Write(vwiEncInt(i))                       // Parent
 			w.chapterCount++
-			Id++
+			id++
 		}
 	}
 }
 
-func (w *MobiWriter) initPDF(bw *binaryWriter) *MobiWriter {
+func (w *mobiBuilder) initPDF(bw *binaryWriter) *mobiBuilder {
 	stringToBytes(underlineTitle(w.title), &w.Pdf.DatabaseName) // Set Database Name
 	w.Pdf.CreationTime = w.timestamp                            // Set Time
 	w.Pdf.ModificationTime = w.timestamp                        // Set Time
@@ -415,7 +430,7 @@ func (w *MobiWriter) initPDF(bw *binaryWriter) *MobiWriter {
 			Oft = (uint32(w.Pdh.RecordCount) * 8) + uint32(1024*10)
 		}
 		if i > 0 {
-			Oft += uint32(len(w.Records[i]))
+			Oft += uint32(len(w.records[i]))
 		}
 	}
 
@@ -424,7 +439,7 @@ func (w *MobiWriter) initPDF(bw *binaryWriter) *MobiWriter {
 	return w
 }
 
-func (w *MobiWriter) initPDH(bw *binaryWriter) *MobiWriter {
+func (w *mobiBuilder) initPDH(bw *binaryWriter) *mobiBuilder {
 	w.Pdh.Compression = w.compression
 	w.Pdh.RecordSize = MOBI_MAX_RECORD_SIZE
 
@@ -432,7 +447,7 @@ func (w *MobiWriter) initPDH(bw *binaryWriter) *MobiWriter {
 	return w
 }
 
-func (w *MobiWriter) initHeader(bw *binaryWriter) *MobiWriter {
+func (w *mobiBuilder) initHeader(bw *binaryWriter) *mobiBuilder {
 	stringToBytes("MOBI", &w.Header.Identifier)
 	w.Header.HeaderLength = 232
 	w.Header.MobiType = 2
@@ -440,20 +455,20 @@ func (w *MobiWriter) initHeader(bw *binaryWriter) *MobiWriter {
 	w.Header.UniqueID = w.Pdf.UniqueIDSeed + 1
 	w.Header.FileVersion = 6
 	w.Header.MinVersion = 6
-	w.Header.OrthographicIndex = 4294967295
-	w.Header.InflectionIndex = 4294967295
-	w.Header.IndexNames = 4294967295
+	w.Header.OrthographicIndex = uint32Max
+	w.Header.InflectionIndex = uint32Max
+	w.Header.IndexNames = uint32Max
 	w.Header.Locale = 1033
-	w.Header.IndexKeys = 4294967295
-	w.Header.ExtraIndex0 = 4294967295
-	w.Header.ExtraIndex1 = 4294967295
-	w.Header.ExtraIndex2 = 4294967295
-	w.Header.ExtraIndex3 = 4294967295
-	w.Header.ExtraIndex4 = 4294967295
-	w.Header.ExtraIndex5 = 4294967295
+	w.Header.IndexKeys = uint32Max
+	w.Header.ExtraIndex0 = uint32Max
+	w.Header.ExtraIndex1 = uint32Max
+	w.Header.ExtraIndex2 = uint32Max
+	w.Header.ExtraIndex3 = uint32Max
+	w.Header.ExtraIndex4 = uint32Max
+	w.Header.ExtraIndex5 = uint32Max
 	w.Header.ExthFlags = 80
-	w.Header.DrmOffset = 4294967295
-	w.Header.DrmCount = 4294967295
+	w.Header.DrmOffset = uint32Max
+	w.Header.DrmCount = uint32Max
 	w.Header.FirstContentRecordNumber = 1
 	w.Header.FcisRecordCount = 1
 	w.Header.FlisRecordCount = 1
@@ -461,13 +476,11 @@ func (w *MobiWriter) initHeader(bw *binaryWriter) *MobiWriter {
 	w.Header.Unknown7 = 0
 	w.Header.Unknown8 = 0
 
-	w.Header.SrcsRecordIndex = 4294967295
+	w.Header.SrcsRecordIndex = uint32Max
 	w.Header.SrcsRecordCount = 0
 
-	w.Header.Unknown9 = 4294967295
-	w.Header.Unknown10 = 4294967295
-	//w.Header.FirstCompilationDataSectionCount = 4294967295
-	//w.Header.NumberOfCompilationDataSections = 4294967295
+	w.Header.Unknown9 = uint32Max
+	w.Header.Unknown10 = uint32Max
 	w.Header.ExtraRecordDataFlags = 1 //1
 
 	w.Header.FullNameLength = uint32(len(w.title))
@@ -477,7 +490,7 @@ func (w *MobiWriter) initHeader(bw *binaryWriter) *MobiWriter {
 	return w
 }
 
-func (w *MobiWriter) initExth(bw *binaryWriter) *MobiWriter {
+func (w *mobiBuilder) initExth(bw *binaryWriter) *mobiBuilder {
 	stringToBytes("EXTH", &w.Exth.Identifier)
 	w.Exth.HeaderLenght = 12
 

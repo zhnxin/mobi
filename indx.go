@@ -10,12 +10,12 @@ type mobiIndx struct {
 	HeaderLen          uint32
 	Unk0               uint32
 	Unk1               uint32 /* 1 when inflection is normal? */
-	Indx_Type          uint32 /* 12: 0 - normal, 2 - inflection */
-	Idxt_Offset        uint32 /* 20: IDXT offset */
-	Idxt_Count         uint32 /* 24: entries count */
-	Idxt_Encoding      uint32 /* 28: encoding */
+	IndxType           uint32 /* 12: 0 - normal, 2 - inflection */
+	IdxtOffset         uint32 /* 20: IDXT offset */
+	IdxtCount          uint32 /* 24: entries count */
+	IdxtEncoding       uint32 /* 28: encoding */
 	SetUnk2            uint32 //-1
-	Idxt_Entry_Count   uint32 /* 36: total entries count */
+	IdxtEntryCount     uint32 /* 36: total entries count */
 	Ordt_Offset        uint32
 	Ligt_Offset        uint32
 	Ligt_Entries_Count uint32 /* 48: LIGT entries count */
