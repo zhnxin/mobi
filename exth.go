@@ -1,6 +1,6 @@
 package mobi
 
-// Type of EXTH record. If it's Binary/Numberic then read/write
+// ExthType is type of EXTH record. If it's Binary/Numberic then read/write
 // it using BigEndian, String is read/write using LittleEndian
 type ExthType uint32
 
@@ -10,7 +10,7 @@ const (
 	EXTH_TYPE_BINARY  ExthType = 2
 )
 
-// EXTH record IDs
+// EXTH record IDs. Screw the linter. They get to stay as ALL_CAPS
 const (
 	EXTH_DRMSERVER       uint32 = 1
 	EXTH_DRMCOMMERCE            = 2
@@ -91,7 +91,7 @@ const (
 	EXTH_CREATORBUILDREV = 535
 )
 
-// EXTH Tag ID - Name - Type relationship
+// ExthMeta is the EXTH Tag ID - Name - Type relationship
 var ExthMeta = []mobiExthMeta{
 	{0, 0, ""},
 	{EXTH_SAMPLE, EXTH_TYPE_NUMERIC, "Sample"},
