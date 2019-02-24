@@ -43,7 +43,10 @@ func (w *mobiBuilder) generateINDX1() {
 	tagx.HeaderLenght = uint32(tagx.TagCount()*4) + 12
 
 	TagX := new(bytes.Buffer)
-	binary.Write(TagX, binary.BigEndian, tagx)
+	binary.Write(TagX, binary.BigEndian, tagx.Identifier)
+	binary.Write(TagX, binary.BigEndian, tagx.HeaderLenght)
+	binary.Write(TagX, binary.BigEndian, tagx.ControlByteCount)
+	binary.Write(TagX, binary.BigEndian, tagx.Tags)
 
 	// Indx
 	//	IndxBin := new(bytes.Buffer)
