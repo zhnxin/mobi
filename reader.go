@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"reflect"
 	"strconv"
@@ -11,7 +12,7 @@ import (
 
 // Reader allows for reading a Mobi file
 type Reader struct {
-	file     *os.File
+	file     io.ReadSeeker
 	fileStat os.FileInfo
 	Mobi
 }
@@ -19,12 +20,13 @@ type Reader struct {
 // NewReader constructs a new reader
 func NewReader(filename string) (out *Reader, err error) {
 	out = &Reader{}
-	out.file, err = os.Open(filename)
+	file, err := os.Open(filename)
+	out.file = file
 	if err != nil {
 		return nil, err
 	}
 
-	out.fileStat, err = out.file.Stat()
+	out.fileStat, err = file.Stat()
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +75,7 @@ func (r *Reader) parsePdf() error {
 	}
 
 	//After the records offsets there's a 2 byte padding
-	r.file.Seek(2, 1)
+	r.file.Seek(2, io.SeekCurrent)
 
 	return nil
 }
@@ -99,7 +101,7 @@ func (r *Reader) parsePdh() error {
 
 	// Current header struct only reads 232 bytes. So if actual header lenght is greater, then we need to skip to Exth.
 	Skip := int64(r.Header.HeaderLength) - int64(reflect.TypeOf(r.Header).Size())
-	r.file.Seek(Skip, 1)
+	r.file.Seek(Skip, io.SeekCurrent)
 
 	// Exth Record
 	// To check whenever there's EXTH record or not, we need to check and see if 6th bit of r.Header.ExthFlags is set.
@@ -120,7 +122,7 @@ func (r *Reader) parseIndexRecord(n uint32) error {
 		return err
 	}
 
-	RecPos, _ := r.file.Seek(0, 1)
+	RecPos, _ := r.file.Seek(0, io.SeekCurrent)
 
 	if !r.MatchMagic(magicIndx) {
 		return errors.New("Index record not found at specified at given offset")
@@ -140,7 +142,7 @@ func (r *Reader) parseIndexRecord(n uint32) error {
 
 	/* Tagx Record Parsing + Last CNCX */
 	if idx.TagxOffset != 0 {
-		_, err = r.file.Seek(RecPos+int64(idx.TagxOffset), 0)
+		_, err = r.file.Seek(RecPos+int64(idx.TagxOffset), io.SeekStart)
 		if err != nil {
 			return err
 		}
@@ -157,7 +159,7 @@ func (r *Reader) parseIndexRecord(n uint32) error {
 
 			r.Cncx.ID = make([]uint8, r.Cncx.Len)
 			binary.Read(r.file, binary.LittleEndian, &r.Cncx.ID)
-			r.file.Seek(1, 1) //Skip 0x0 termination
+			r.file.Seek(1, io.SeekCurrent) //Skip 0x0 termination
 
 			binary.Read(r.file, binary.BigEndian, &r.Cncx.NCXCount)
 
@@ -177,7 +179,7 @@ func (r *Reader) parseIndexRecord(n uint32) error {
 
 	/* Idxt Record Parsing */
 	if idx.IdxtCount > 0 {
-		_, err = r.file.Seek(RecPos+int64(idx.IdxtOffset), 0)
+		_, err = r.file.Seek(RecPos+int64(idx.IdxtOffset), io.SeekStart)
 		if err != nil {
 			return err
 		}
@@ -195,7 +197,7 @@ func (r *Reader) parseIndexRecord(n uint32) error {
 
 		var PTagxLen = []uint8{0}
 		for i, offset := range r.Idxt.Offset {
-			r.file.Seek(RecPos+int64(offset), 0)
+			r.file.Seek(RecPos+int64(offset), io.SeekStart)
 
 			// Read Byte containing the lenght of a label
 			r.file.Read(PTagxLen)
@@ -250,7 +252,7 @@ func (r *Reader) MatchMagic(magic mobiMagicType) bool {
 func (r *Reader) Peek(n int) Peeker {
 	buf := make([]uint8, n)
 	r.file.Read(buf)
-	r.file.Seek(int64(n)*-1, 1)
+	r.file.Seek(int64(n)*-1, io.SeekCurrent)
 	return buf
 }
 
@@ -303,7 +305,7 @@ func (r *Reader) OffsetToRecord(nu uint32) (uint32, error) {
 		RecLen = uint32(r.fileStat.Size())
 	}
 
-	_, err := r.file.Seek(int64(r.Offsets[n].Offset), 0)
+	_, err := r.file.Seek(int64(r.Offsets[n].Offset), io.SeekStart)
 
 	return RecLen - r.Offsets[n].Offset, err
 }
@@ -354,7 +356,7 @@ func (r *Reader) parseIdxt(IdxtCount uint32) error {
 	//}
 
 	//Skip two bytes? Or skip necessary amount to reach total lenght in multiples of 4?
-	r.file.Seek(2, 1)
+	r.file.Seek(2, io.SeekCurrent)
 
 	// PrintStruct(r.Idxt)
 	return nil
