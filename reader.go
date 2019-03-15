@@ -13,8 +13,8 @@ import (
 // Reader allows for reading a Mobi file
 type Reader struct {
 	file     io.ReadSeeker
-	fileStat os.FileInfo
-	Mobi
+	fileSize int64
+	mobi     Mobi
 }
 
 // NewReader constructs a new reader
@@ -26,12 +26,19 @@ func NewReader(filename string) (out *Reader, err error) {
 		return nil, err
 	}
 
-	out.fileStat, err = file.Stat()
+	stat, err := file.Stat()
+	out.fileSize = stat.Size()
+
 	if err != nil {
 		return nil, err
 	}
 
 	return out, out.Parse()
+}
+
+// NewReaderFrom wraps a ReadSeeker to read mobi books
+func NewReaderFrom(rs io.ReadSeeker, len int64) (out *Reader, err error) {
+	return &Reader{file: rs, fileSize: len}, nil
 }
 
 // Parse will parse the fields of the file into this Reader
@@ -45,8 +52,8 @@ func (r *Reader) Parse() (err error) {
 	}
 
 	// Check if INDX offset is set + attempt to parse INDX
-	if r.Header.IndxRecodOffset > 0 {
-		err = r.parseIndexRecord(r.Header.IndxRecodOffset)
+	if r.mobi.Header.IndxRecodOffset > 0 {
+		err = r.parseIndexRecord(r.mobi.Header.IndxRecodOffset)
 		if err != nil {
 			return
 		}
@@ -59,17 +66,17 @@ func (r *Reader) Parse() (err error) {
 func (r *Reader) parsePdf() error {
 	//First we read PDF Header, this will help us parse subsequential data
 	//binary.Read will take struct and fill it with data from mobi File
-	err := binary.Read(r.file, binary.BigEndian, &r.Pdf)
+	err := binary.Read(r.file, binary.BigEndian, &r.mobi.Pdf)
 	if err != nil {
 		return err
 	}
 
-	if r.Pdf.RecordsNum < 1 {
+	if r.mobi.Pdf.RecordsNum < 1 {
 		return errors.New("Number of records in this file is less than 1")
 	}
 
-	r.Offsets = make([]mobiRecordOffset, r.Pdf.RecordsNum)
-	err = binary.Read(r.file, binary.BigEndian, &r.Offsets)
+	r.mobi.Offsets = make([]mobiRecordOffset, r.mobi.Pdf.RecordsNum)
+	err = binary.Read(r.file, binary.BigEndian, &r.mobi.Offsets)
 	if err != nil {
 		return err
 	}
@@ -84,28 +91,28 @@ func (r *Reader) parsePdf() error {
 func (r *Reader) parsePdh() error {
 	// Palm Doc Header
 	// Now we go onto reading record 0 that contains Palm Doc Header, Mobi Header, Exth Header...
-	binary.Read(r.file, binary.BigEndian, &r.Pdh)
+	binary.Read(r.file, binary.BigEndian, &r.mobi.Pdh)
 
 	// Check and see if there's a record encryption
-	if r.Pdh.Encryption != 0 {
+	if r.mobi.Pdh.Encryption != 0 {
 		return errors.New("Records are encrypted")
 	}
 
 	// Mobi Header
 	// Now it's time to read Mobi Header
 	if r.MatchMagic(magicMobi) {
-		binary.Read(r.file, binary.BigEndian, &r.Header)
+		binary.Read(r.file, binary.BigEndian, &r.mobi.Header)
 	} else {
 		return errors.New("Can not find MOBI header. File might be corrupt")
 	}
 
 	// Current header struct only reads 232 bytes. So if actual header lenght is greater, then we need to skip to Exth.
-	Skip := int64(r.Header.HeaderLength) - int64(reflect.TypeOf(r.Header).Size())
+	Skip := int64(r.mobi.Header.HeaderLength) - int64(reflect.TypeOf(r.mobi.Header).Size())
 	r.file.Seek(Skip, io.SeekCurrent)
 
 	// Exth Record
 	// To check whenever there's EXTH record or not, we need to check and see if 6th bit of r.Header.ExthFlags is set.
-	if hasBit(int(r.Header.ExthFlags), 6) {
+	if hasBit(int(r.mobi.Header.ExthFlags), 6) {
 		err := r.ExthParse()
 
 		if err != nil {
@@ -130,10 +137,10 @@ func (r *Reader) parseIndexRecord(n uint32) error {
 	//fmt.Printf("Index %s %v\n", r.Peek(4), RecLen)
 
 	//if len(r.Indx) == 0 {
-	r.Indx = append(r.Indx, mobiIndx{})
+	r.mobi.Indx = append(r.mobi.Indx, mobiIndx{})
 	//}
 
-	idx := &r.Indx[len(r.Indx)-1]
+	idx := &r.mobi.Indx[len(r.mobi.Indx)-1]
 
 	err = binary.Read(r.file, binary.BigEndian, idx)
 	if err != nil {
@@ -154,14 +161,14 @@ func (r *Reader) parseIndexRecord(n uint32) error {
 
 		// Last CNCX record follows TAGX
 		if idx.CncxRecordsCount > 0 {
-			r.Cncx = mobiCncx{}
-			binary.Read(r.file, binary.BigEndian, &r.Cncx.Len)
+			r.mobi.Cncx = mobiCncx{}
+			binary.Read(r.file, binary.BigEndian, &r.mobi.Cncx.Len)
 
-			r.Cncx.ID = make([]uint8, r.Cncx.Len)
-			binary.Read(r.file, binary.LittleEndian, &r.Cncx.ID)
+			r.mobi.Cncx.ID = make([]uint8, r.mobi.Cncx.Len)
+			binary.Read(r.file, binary.LittleEndian, &r.mobi.Cncx.ID)
 			r.file.Seek(1, io.SeekCurrent) //Skip 0x0 termination
 
-			binary.Read(r.file, binary.BigEndian, &r.Cncx.NCXCount)
+			binary.Read(r.file, binary.BigEndian, &r.mobi.Cncx.NCXCount)
 
 			// PrintStruct(r.Cncx)
 		}
@@ -196,7 +203,7 @@ func (r *Reader) parseIndexRecord(n uint32) error {
 		//r.file.Seek(RecPos+int64(idx.HeaderLen), 0)
 
 		var PTagxLen = []uint8{0}
-		for i, offset := range r.Idxt.Offset {
+		for i, offset := range r.mobi.Idxt.Offset {
 			r.file.Seek(RecPos+int64(offset), io.SeekStart)
 
 			// Read Byte containing the lenght of a label
@@ -206,9 +213,9 @@ func (r *Reader) parseIndexRecord(n uint32) error {
 			PTagxLabel := make([]uint8, PTagxLen[0])
 			r.file.Read(PTagxLabel)
 
-			PTagxLen1 := uint16(idx.IdxtOffset) - r.Idxt.Offset[i]
-			if i+1 < len(r.Idxt.Offset) {
-				PTagxLen1 = r.Idxt.Offset[i+1] - r.Idxt.Offset[i]
+			PTagxLen1 := uint16(idx.IdxtOffset) - r.mobi.Idxt.Offset[i]
+			if i+1 < len(r.mobi.Idxt.Offset) {
+				PTagxLen1 = r.mobi.Idxt.Offset[i+1] - r.mobi.Idxt.Offset[i]
 			}
 
 			PTagxData := make([]uint8, PTagxLen1)
@@ -263,27 +270,27 @@ func (r *Reader) ExthParse() error {
 		return errors.New("Currect reading position does not contain EXTH record")
 	}
 
-	binary.Read(r.file, binary.BigEndian, &r.Exth.Identifier)
-	binary.Read(r.file, binary.BigEndian, &r.Exth.HeaderLenght)
-	binary.Read(r.file, binary.BigEndian, &r.Exth.RecordCount)
+	binary.Read(r.file, binary.BigEndian, &r.mobi.Exth.Identifier)
+	binary.Read(r.file, binary.BigEndian, &r.mobi.Exth.HeaderLenght)
+	binary.Read(r.file, binary.BigEndian, &r.mobi.Exth.RecordCount)
 
-	r.Exth.Records = make([]mobiExthRecord, r.Exth.RecordCount)
-	for i := range r.Exth.Records {
-		binary.Read(r.file, binary.BigEndian, &r.Exth.Records[i].RecordType)
-		binary.Read(r.file, binary.BigEndian, &r.Exth.Records[i].RecordLength)
+	r.mobi.Exth.Records = make([]mobiExthRecord, r.mobi.Exth.RecordCount)
+	for i := range r.mobi.Exth.Records {
+		binary.Read(r.file, binary.BigEndian, &r.mobi.Exth.Records[i].RecordType)
+		binary.Read(r.file, binary.BigEndian, &r.mobi.Exth.Records[i].RecordLength)
 
-		r.Exth.Records[i].Value = make([]uint8, r.Exth.Records[i].RecordLength-8)
+		r.mobi.Exth.Records[i].Value = make([]uint8, r.mobi.Exth.Records[i].RecordLength-8)
 
-		Tag := getExthMetaByTag(r.Exth.Records[i].RecordType)
+		Tag := getExthMetaByTag(r.mobi.Exth.Records[i].RecordType)
 		switch Tag.Type {
 		case EXTH_TYPE_BINARY:
-			binary.Read(r.file, binary.BigEndian, &r.Exth.Records[i].Value)
+			binary.Read(r.file, binary.BigEndian, &r.mobi.Exth.Records[i].Value)
 			//			fmt.Printf("%v: %v\n", Tag.Name, r.Exth.Records[i].Value)
 		case EXTH_TYPE_STRING:
-			binary.Read(r.file, binary.LittleEndian, &r.Exth.Records[i].Value)
+			binary.Read(r.file, binary.LittleEndian, &r.mobi.Exth.Records[i].Value)
 			//			fmt.Printf("%v: %s\n", Tag.Name, r.Exth.Records[i].Value)
 		case EXTH_TYPE_NUMERIC:
-			binary.Read(r.file, binary.BigEndian, &r.Exth.Records[i].Value)
+			binary.Read(r.file, binary.BigEndian, &r.mobi.Exth.Records[i].Value)
 			//			fmt.Printf("%v: %d\n", Tag.Name, binary.BigEndian.Uint32(r.Exth.Records[i].Value))
 		}
 	}
@@ -294,20 +301,20 @@ func (r *Reader) ExthParse() error {
 // OffsetToRecord sets reading position to record N, returns total record lenght
 func (r *Reader) OffsetToRecord(nu uint32) (uint32, error) {
 	n := int(nu)
-	if n > int(r.Pdf.RecordsNum)-1 {
+	if n > int(r.mobi.Pdf.RecordsNum)-1 {
 		return 0, errors.New("Record ID requested is greater than total amount of records")
 	}
 
 	RecLen := uint32(0)
-	if n+1 < int(r.Pdf.RecordsNum) {
-		RecLen = r.Offsets[n+1].Offset
+	if n+1 < int(r.mobi.Pdf.RecordsNum) {
+		RecLen = r.mobi.Offsets[n+1].Offset
 	} else {
-		RecLen = uint32(r.fileStat.Size())
+		RecLen = uint32(r.fileSize)
 	}
 
-	_, err := r.file.Seek(int64(r.Offsets[n].Offset), io.SeekStart)
+	_, err := r.file.Seek(int64(r.mobi.Offsets[n].Offset), io.SeekStart)
 
-	return RecLen - r.Offsets[n].Offset, err
+	return RecLen - r.mobi.Offsets[n].Offset, err
 }
 
 func (r *Reader) parseTagx() error {
@@ -315,20 +322,20 @@ func (r *Reader) parseTagx() error {
 		return errors.New("TAGX record not found at given offset")
 	}
 
-	r.Tagx = mobiTagx{}
+	r.mobi.Tagx = mobiTagx{}
 
-	binary.Read(r.file, binary.BigEndian, &r.Tagx.Identifier)
-	binary.Read(r.file, binary.BigEndian, &r.Tagx.HeaderLenght)
-	if r.Tagx.HeaderLenght < 12 {
+	binary.Read(r.file, binary.BigEndian, &r.mobi.Tagx.Identifier)
+	binary.Read(r.file, binary.BigEndian, &r.mobi.Tagx.HeaderLenght)
+	if r.mobi.Tagx.HeaderLenght < 12 {
 		return errors.New("TAGX record too short")
 	}
-	binary.Read(r.file, binary.BigEndian, &r.Tagx.ControlByteCount)
+	binary.Read(r.file, binary.BigEndian, &r.mobi.Tagx.ControlByteCount)
 
-	TagCount := (r.Tagx.HeaderLenght - 12) / 4
-	r.Tagx.Tags = make([]mobiTagxTags, TagCount)
+	TagCount := (r.mobi.Tagx.HeaderLenght - 12) / 4
+	r.mobi.Tagx.Tags = make([]mobiTagxTags, TagCount)
 
 	for i := 0; i < int(TagCount); i++ {
-		err := binary.Read(r.file, binary.BigEndian, &r.Tagx.Tags[i])
+		err := binary.Read(r.file, binary.BigEndian, &r.mobi.Tagx.Tags[i])
 		if err != nil {
 			return err
 		}
@@ -346,11 +353,11 @@ func (r *Reader) parseIdxt(IdxtCount uint32) error {
 		return errors.New("IDXT record not found at given offset")
 	}
 
-	binary.Read(r.file, binary.BigEndian, &r.Idxt.Identifier)
+	binary.Read(r.file, binary.BigEndian, &r.mobi.Idxt.Identifier)
 
-	r.Idxt.Offset = make([]uint16, IdxtCount)
+	r.mobi.Idxt.Offset = make([]uint16, IdxtCount)
 
-	binary.Read(r.file, binary.BigEndian, &r.Idxt.Offset)
+	binary.Read(r.file, binary.BigEndian, &r.mobi.Idxt.Offset)
 	//for id, _ := range r.Idxt.Offset {
 	//	binary.Read(r.Buffer, binary.BigEndian, &r.Idxt.Offset[id])
 	//}
@@ -365,12 +372,12 @@ func (r *Reader) parseIdxt(IdxtCount uint32) error {
 func (r *Reader) parsePtagx(data []byte) {
 	//control_byte_count
 	//tagx
-	controlBytes := data[:r.Tagx.ControlByteCount]
-	data = data[r.Tagx.ControlByteCount:]
+	controlBytes := data[:r.mobi.Tagx.ControlByteCount]
+	data = data[r.mobi.Tagx.ControlByteCount:]
 
 	var Ptagx []mobiPTagx //= make([]mobiPTagx, r.Tagx.TagCount())
 
-	for _, x := range r.Tagx.Tags {
+	for _, x := range r.mobi.Tagx.Tags {
 		if x.ControlByte == 0x01 {
 			controlBytes = controlBytes[1:]
 			continue
