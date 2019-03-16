@@ -60,7 +60,7 @@ func testData() []byte {
 }
 
 // some html-formatted test data to simulate use case
-const lipsum = `<div id="lipsum">
+const lipsum = `<div id="lipsum">æøå
 <p>
 Lorem ipsum dolor sit amet, consectetur adipiscing elit. Cras fermentum molestie urna, in mattis orci placerat non. Duis bibendum risus ac erat molestie, tincidunt sollicitudin metus malesuada. Maecenas rhoncus tincidunt ultricies. Cras vel vehicula diam. Ut laoreet tellus eget pellentesque ullamcorper. Etiam rutrum fringilla nulla ut pulvinar. Donec non tortor et enim mattis porta vitae in tellus. Duis convallis facilisis odio, ac ornare velit posuere in. Donec sapien odio, vehicula ac purus et, imperdiet aliquam quam. Aliquam a pellentesque leo. Suspendisse feugiat mauris ac finibus pharetra. Fusce vitae ex nec ante faucibus ullamcorper. Etiam malesuada erat ut dictum ultrices. Sed eu massa nunc.
 </p>
