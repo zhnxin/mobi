@@ -287,7 +287,7 @@ func makeHTMLRecord(RecN []byte, compression mobiPDHCompression) []byte {
 	}
 
 	if compression == CompressionPalmDoc {
-		RecN = lz77CompressMethod(RecN) // Optionally, compress that mofo with the chosen compression strategy
+		RecN = palmLZ77Compress(RecN) // Optionally, compress that mofo with the chosen compression strategy
 	}
 
 	return RecN // and then return it

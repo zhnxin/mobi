@@ -12,8 +12,9 @@ func TestCorrectness(t *testing.T) {
 		t.Error("I've created too-long input")
 		t.FailNow()
 	}
-	expected := palmDocLZ77Pack(input)
-	actual := fastpalmDocLZ77Pack(input)
+
+	expected := palmLZ77CompressWithResolver(input, newLZ77LookupResolver)
+	actual := palmLZ77CompressWithResolver(input, newLZ77TreeResolver)
 	if !bytes.Equal(expected, actual) {
 		t.Error("Difference in compression")
 		if len(expected) != len(actual) {
@@ -38,7 +39,7 @@ func BenchmarkLZ77(b *testing.B) {
 	input := testData()
 	var res []byte
 	for n := 0; n < b.N; n++ {
-		res = palmDocLZ77Pack(input)
+		res = palmLZ77CompressWithResolver(input, newLZ77LookupResolver)
 	}
 	devnull = res
 }
@@ -47,7 +48,7 @@ func BenchmarkFastLZ77(b *testing.B) {
 	input := testData()
 	var res []byte
 	for n := 0; n < b.N; n++ {
-		res = fastpalmDocLZ77Pack(input)
+		res = palmLZ77CompressWithResolver(input, newLZ77TreeResolver)
 	}
 	devnull = res
 }
