@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/ioutil"
 	"math/rand"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -256,15 +257,30 @@ func (w *mobiBuilder) convertHTMLToRecords() {
 
 	// Convert chunks to records in parallel, but preserving the ordering
 	records := make([][]byte, len(chunks))
+
 	wg := sync.WaitGroup{}
-	wg.Add(len(chunks))
-	for i := range chunks {
-		go func(i int) {
+
+	// make a channel to send work to workers
+	ch := make(chan int)
+
+	// spin up workers
+	for i := 0; i < runtime.NumCPU(); i++ {
+		wg.Add(1)
+		go func() {
 			defer wg.Done()
-			records[i] = makeHTMLRecord(chunks[i], w.compression)
-		}(i)
+			for i := range ch {
+				records[i] = makeHTMLRecord(chunks[i], w.compression)
+			}
+		}()
 	}
-	wg.Wait()
+
+	// Send them the work
+	for i := range chunks {
+		ch <- i
+	}
+
+	close(ch) // no more work
+	wg.Wait() // wait for the workers to finish
 
 	// Finally, add the records in order
 	for i := range records {
