@@ -198,16 +198,20 @@ func lz77Lookup(window, chunk []byte) (idx, foundLen int) {
 // lz77TreeResolver implements the lz77Resolver interface with a prefix tree to find length 3 chunks before evaluating the best one.
 // It is a lot faster than the lz77LookupResolver, but uses more memory
 type lz77TreeResolver struct {
-	*lz77TreeNode
 	data []byte
+	tree map[byte]map[byte]map[byte][]int
 }
 
 func newLZ77TreeResolver(data []byte) lz77Resolver {
-	tree := buildLZ77Tree(data)
-	return lz77TreeResolver{tree, data}
+	tree := make(map[byte]map[byte]map[byte][]int)
+	resolver := lz77TreeResolver{data, tree}
+	for i := 0; i < len(data)-3; i++ {
+		resolver.addPrefixLocation(data[i:i+3], i)
+	}
+	return &resolver
 }
 
-func (r lz77TreeResolver) findChunk(needle []byte, idxMin, idxMax int) (absIdx, chunkLen int) {
+func (r *lz77TreeResolver) findChunk(needle []byte, idxMin, idxMax int) (absIdx, chunkLen int) {
 	locations := r.getPrefixLocations(needle)
 	absIdx, chunkLen = -1, -1
 	if idxMin < 0 {
@@ -245,30 +249,9 @@ func (r lz77TreeResolver) findChunk(needle []byte, idxMin, idxMax int) (absIdx, 
 	return
 }
 
-func buildLZ77Tree(data []byte) *lz77TreeNode {
-	tree := newLZ77TreeNode()
-
-	for i := 0; i < len(data)-3; i++ {
-		tree.addPrefixLocation(data[i:i+3], i)
-	}
-
-	return tree
-}
-
-// Prefix tree structure to store all the locations of 3-byte prefixes in a byte string
-// for faster LZ77 compression
-type lz77TreeNode struct {
-	children  [0xFF]*lz77TreeNode
-	locations []int
-}
-
-func newLZ77TreeNode() *lz77TreeNode {
-	return &lz77TreeNode{locations: []int{}}
-}
-
 // addPrefixLocation inserts a new prefix, which must be at least 3 bytes long - we don't care about
 // anything beyond the first 3 bytes
-func (root *lz77TreeNode) addPrefixLocation(prefix []byte, location int) {
+func (r *lz77TreeResolver) addPrefixLocation(prefix []byte, location int) {
 	if len(prefix) < 3 {
 		panic("Prefixes must be 3 bytes long")
 	}
@@ -279,34 +262,27 @@ func (root *lz77TreeNode) addPrefixLocation(prefix []byte, location int) {
 
 	// Dig through the structure
 	// create it if it doesn't exist
-	firstLevel := root.children[one]
-	if firstLevel == nil {
-		firstLevel = newLZ77TreeNode()
-		root.children[one] = firstLevel
+	firstLevel, ok := r.tree[one]
+	if !ok {
+		firstLevel = make(map[byte]map[byte][]int)
+		r.tree[one] = firstLevel
 	}
-	secondLevel := firstLevel.children[two]
-	if secondLevel == nil {
-		secondLevel = newLZ77TreeNode()
-		firstLevel.children[two] = secondLevel
+	secondLevel, ok := firstLevel[two]
+	if !ok {
+		secondLevel = make(map[byte][]int)
+		firstLevel[two] = secondLevel
 	}
-	thirdLevel := secondLevel.children[three]
-	if thirdLevel == nil {
-		thirdLevel = newLZ77TreeNode()
-		secondLevel.children[three] = thirdLevel
+	thirdLevel, ok := secondLevel[three]
+	if !ok {
+		thirdLevel = []int{location}
+		secondLevel[three] = thirdLevel
+	} else {
+		secondLevel[three] = append(thirdLevel, location)
 	}
-
-	// store the location at the third level
-	thirdLevel.locations = append(thirdLevel.locations, location)
 }
 
 // getPrefixLocations gets all locations of the prefix stored in the tree.
-// the prefix must be at least 3 bytes long, or the lookup will return an emty slice
-func (root *lz77TreeNode) getPrefixLocations(prefix []byte) []int {
-	notFound := []int{} // default return value
-
-	if len(prefix) < 3 {
-		return notFound
-	}
+func (r *lz77TreeResolver) getPrefixLocations(prefix []byte) []int {
 
 	// grab the three prefix bytes we need
 	one := prefix[0]
@@ -314,19 +290,7 @@ func (root *lz77TreeNode) getPrefixLocations(prefix []byte) []int {
 	three := prefix[2]
 
 	// Dig through the structure
-	firstLevel := root.children[one]
-	if firstLevel == nil {
-		return notFound
-	}
-	secondLevel := firstLevel.children[two]
-	if secondLevel == nil {
-		return notFound
-	}
-	thirdLevel := secondLevel.children[three]
-	if thirdLevel == nil {
-		return notFound
-	}
-
-	// store the location at the third level
-	return thirdLevel.locations
+	// this is safe because every single 3-byte prefix in the body is in the data structure
+	// and we are only expecting to be asked about prefixes from the initial body
+	return r.tree[one][two][three]
 }
