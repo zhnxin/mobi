@@ -46,5 +46,15 @@ Writer/Reader for Mobi format.
 	m.WriteTo(file)
 	file.Close()
 
+#### Compression
+
+The `mobi` package implements two versions of the LZ77 compression algorithm. A fast version that uses a lookup data structure, which increases memory consumption
+and a low-memory version that does not use any lookup data structures, but is therefore slower.
+
+The desired compression strategy can be chosen like this
+
+	mobi.SetCompressionStrategy(mobi.CompressFast) // Use lookup data structure (default)
+    mobi.SetCompressionStrategy(mobi.CompressLowMemory) // Choose low-memory consumption (slower)
+
 ### Reader
 For now, Reader does not give any useful information.
