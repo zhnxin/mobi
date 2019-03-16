@@ -199,11 +199,11 @@ func lz77Lookup(window, chunk []byte) (idx, foundLen int) {
 // It is a lot faster than the lz77LookupResolver, but uses more memory
 type lz77TreeResolver struct {
 	data []byte
-	tree map[byte]map[byte]map[byte][]int
+	tree map[[3]byte][]int
 }
 
 func newLZ77TreeResolver(data []byte) lz77Resolver {
-	tree := make(map[byte]map[byte]map[byte][]int)
+	tree := make(map[[3]byte][]int)
 	resolver := lz77TreeResolver{data, tree}
 	for i := 0; i < len(data)-3; i++ {
 		resolver.addPrefixLocation(data[i:i+3], i)
@@ -255,42 +255,25 @@ func (r *lz77TreeResolver) addPrefixLocation(prefix []byte, location int) {
 	if len(prefix) < 3 {
 		panic("Prefixes must be 3 bytes long")
 	}
-	// grab the three prefix bytes we need
-	one := prefix[0]
-	two := prefix[1]
-	three := prefix[2]
 
-	// Dig through the structure
-	// create it if it doesn't exist
-	firstLevel, ok := r.tree[one]
+	// Create the lookup key
+	key := [3]byte{prefix[0], prefix[1], prefix[2]}
+	locations, ok := r.tree[key]
 	if !ok {
-		firstLevel = make(map[byte]map[byte][]int)
-		r.tree[one] = firstLevel
-	}
-	secondLevel, ok := firstLevel[two]
-	if !ok {
-		secondLevel = make(map[byte][]int)
-		firstLevel[two] = secondLevel
-	}
-	thirdLevel, ok := secondLevel[three]
-	if !ok {
-		thirdLevel = []int{location}
-		secondLevel[three] = thirdLevel
+		locations = []int{location}
+		r.tree[key] = locations
 	} else {
-		secondLevel[three] = append(thirdLevel, location)
+		r.tree[key] = append(locations, location)
 	}
+
 }
 
 // getPrefixLocations gets all locations of the prefix stored in the tree.
 func (r *lz77TreeResolver) getPrefixLocations(prefix []byte) []int {
 
-	// grab the three prefix bytes we need
-	one := prefix[0]
-	two := prefix[1]
-	three := prefix[2]
+	// Grab the stored slice for the 3-byte prefix
 
-	// Dig through the structure
 	// this is safe because every single 3-byte prefix in the body is in the data structure
 	// and we are only expecting to be asked about prefixes from the initial body
-	return r.tree[one][two][three]
+	return r.tree[[3]byte{prefix[0], prefix[1], prefix[2]}]
 }
