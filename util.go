@@ -21,6 +21,28 @@ const (
 	lz77MinChunkLen = 3
 )
 
+// CompressionStrategy is an enum of available compression strategies to use
+type CompressionStrategy int
+
+const (
+	// CompressFast indicates fast compression with higher memory overhead (the default)
+	CompressFast = CompressionStrategy(iota)
+	// CompressLowMemory uses a slower, but less memory intensive compression
+	CompressLowMemory
+)
+
+// SetCompressionStrategy picks the compression strategy to use
+func SetCompressionStrategy(strategy CompressionStrategy) {
+	switch strategy {
+	case CompressFast:
+		lz77CompressMethod = fastpalmDocLZ77Pack
+	case CompressLowMemory:
+		lz77CompressMethod = palmDocLZ77Pack
+	}
+}
+
+var lz77CompressMethod = fastpalmDocLZ77Pack
+
 func printStruct(x interface{}) {
 	ref := reflect.ValueOf(x)
 
