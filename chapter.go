@@ -25,14 +25,14 @@ type mobiChapter struct {
 
 // NewChapter adds a new chapter to the output MobiBook
 func (w *mobiBuilder) NewChapter(title string, text []byte) Chapter {
-	w.chapters = append(w.chapters, mobiChapter{ID: w.chapterCount, Title: title, HTML: minimizeHTML(text)})
+	w.chapters = append(w.chapters, mobiChapter{ID: w.chapterCount, Title: title, HTML: text})
 	w.chapterCount++
 	return &w.chapters[len(w.chapters)-1]
 }
 
 // AddSubChapter adds a sub-chapter to the Chapter and returns the parent chapter back again
 func (w *mobiChapter) AddSubChapter(title string, text []byte) Chapter {
-	w.SubChapters = append(w.SubChapters, &mobiChapter{Parent: w.ID, Title: title, HTML: minimizeHTML(text), subChapter: true})
+	w.SubChapters = append(w.SubChapters, &mobiChapter{Parent: w.ID, Title: title, HTML: text, subChapter: true})
 	return w
 }
 

@@ -146,14 +146,6 @@ func vwiEncInt(x int) []uint8 {
 	return buf[:z]
 }
 
-func minimizeHTML(x []byte) []byte {
-	//Clear multiple spaces
-	out := regexp.MustCompile("[ ]+").ReplaceAllString(string(x), " ")
-	out = regexp.MustCompile("[\t\r\n]").ReplaceAllString(out, "")
-	//Clear tabs, new lines
-	return []byte(out)
-}
-
 var maskToBitShifts = map[int]uint8{1: 0, 2: 1, 3: 0, 4: 2, 8: 3, 12: 2, 16: 4, 32: 5, 48: 4, 64: 6, 128: 7, 192: 6}
 
 func controlByte(tagx []mobiTagxTags) []byte {
