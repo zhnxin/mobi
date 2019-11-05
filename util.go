@@ -21,6 +21,12 @@ const (
 	lz77MinChunkLen = 3
 )
 
+var isNotSkipLog bool = true
+
+func SetSkipLog(flag bool) {
+	isNotSkipLog = !flag
+}
+
 func printStruct(x interface{}) {
 	ref := reflect.ValueOf(x)
 

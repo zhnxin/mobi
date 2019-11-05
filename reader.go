@@ -220,7 +220,9 @@ func (r *Reader) parseIndexRecord(n uint32) error {
 
 			PTagxData := make([]uint8, PTagxLen1)
 			r.file.Read(PTagxData)
-			fmt.Printf("\n------ %v --------\n", i)
+			if isNotSkipLog {
+				fmt.Printf("\n------ %v --------\n", i)
+			}
 			r.parsePtagx(PTagxData)
 			Count++
 			//fmt.Printf("Len: %v | Label: %s | %v\n", PTagxLen, PTagxLabel, Count)
@@ -340,15 +342,18 @@ func (r *Reader) parseTagx() error {
 			return err
 		}
 	}
-
-	fmt.Println("TagX called")
+	if isNotSkipLog {
+		fmt.Println("TagX called")
+	}
 	// PrintStruct(r.Tagx)
 
 	return nil
 }
 
 func (r *Reader) parseIdxt(IdxtCount uint32) error {
-	fmt.Println("parseIdxt called")
+	if isNotSkipLog {
+		fmt.Println("parseIdxt called")
+	}
 	if !r.MatchMagic(magicIdxt) {
 		return errors.New("IDXT record not found at given offset")
 	}
@@ -424,21 +429,27 @@ func (r *Reader) parsePtagx(data []byte) {
 			//fmt.Printf("TAGX %v %v VC:%v VB:%v\n", x.Tag, x.TagNum, value_count, value_bytes)
 		}
 	}
-	fmt.Printf("%+v", Ptagx)
+	if isNotSkipLog {
+		fmt.Printf("%+v", Ptagx)
+	}
 	var IndxEntry []mobiIndxEntry
 	for iz, x := range Ptagx {
 		var values []uint32
 
 		if x.ValueCount != 0 {
 			// Read value_count * values_per_entry variable width values.
-			fmt.Printf("\nDec: ")
+			if isNotSkipLog {
+				fmt.Printf("\nDec: ")
+			}
 			for i := 0; i < int(x.ValueCount)*int(x.TagValueCount); i++ {
 				byts, consumed := vwiDec(data, true)
 				data = data[consumed:]
 
 				values = append(values, byts)
 				IndxEntry = append(IndxEntry, mobiIndxEntry{x.Tag, byts})
-				fmt.Printf("%v %s: %v ", iz, tagEntryMap[x.Tag], byts)
+				if isNotSkipLog {
+					fmt.Printf("%v %s: %v ", iz, tagEntryMap[x.Tag], byts)
+				}
 			}
 		} else {
 			// Convert value_bytes to variable width values.
@@ -461,5 +472,7 @@ func (r *Reader) parsePtagx(data []byte) {
 			}
 		}
 	}
-	fmt.Println("---------------------------")
+	if isNotSkipLog {
+		fmt.Println("---------------------------")
+	}
 }

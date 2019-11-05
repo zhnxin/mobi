@@ -365,7 +365,9 @@ func (w *mobiBuilder) generateCNCX() {
 		if node.SubChapterCount() > 0 {
 			ch1 := id
 			chN := id + node.SubChapterCount() - 1
-			fmt.Printf("Parent: %v %v %v [CHILDREN: %v %v]\n", id, node.SubChapterCount(), node.Title, ch1, chN)
+			if isNotSkipLog {
+				fmt.Printf("Parent: %v %v %v [CHILDREN: %v %v]\n", id, node.SubChapterCount(), node.Title, ch1, chN)
+			}
 			id += node.SubChapterCount()
 
 			cncxID := fmt.Sprintf("%03v", id)
@@ -405,7 +407,9 @@ func (w *mobiBuilder) generateCNCX() {
 
 	for i, node := range w.chapters {
 		for _, child := range node.SubChapters {
-			fmt.Printf("Child: %v %v %v\n", id, i, child.Title)
+			if isNotSkipLog {
+				fmt.Printf("Child: %v %v %v\n", id, i, child.Title)
+			}
 			cncxID := fmt.Sprintf("%03v", w.chapterCount)
 			w.Idxt.Offset = append(w.Idxt.Offset, uint16(indxHeaderLen+w.cncxBuffer.Len()))
 
